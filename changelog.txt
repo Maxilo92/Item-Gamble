@@ -1,4 +1,18 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.8.0
+Date: 2026-10-07
+  Changes:
+    - The target is a slot like on the constant combinator: left click opens the selection dialog,
+      right click clears it.
+    - The selection dialog follows the vanilla "Select signal" dialog and uses its own styles:
+      item group tabs, slot grid with one row per subgroup, quality buttons (only researched
+      qualities), slider with amount field and the green confirm button. Double click or Enter
+      confirm as well.
+    - Search in the dialog finds translated item names, like in the game.
+  Bugfixes:
+    - The click sound of the reel is in sync now. It clicks exactly when a field passes the arrow
+      and stays silent while the fields rush by too fast for single clicks.
+---------------------------------------------------------------------------------------------------
 Version: 0.7.0
 Date: 2026-10-07
   Features:

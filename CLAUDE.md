@@ -140,3 +140,13 @@ User: spannender, aber nicht überladen; Near Misses, zufällige Spin-Zeiten; la
 - Knappe Fälle stehen 0,42–0,47 Felder daneben, hängen dort (lang 40, normal 12 Frames) und rasten dann ein. Unter 0,5 bleibt das Ergebnisfeld immer das nächstgelegene
 - Gemessen (gemischte Chancen): lange Drehs ~58 % Gewinne. Bei kleinen Chancen sind lange Drehs fast immer Beinahe-Treffer (das klassische Necken)
 - Keine zusätzlichen Effekte, nur Tempo, Pausen und die vorhandenen Klicks
+
+### 0.8.0: Zielwahl nach „Signal auswählen“
+
+User will genau den Vanilla-Dialog „Signal auswählen“ des Konstanten Kombinators (Screenshot) und fragte, ob man ihn nicht kopieren kann. Antwort: nein, der Dialog ist Engine-GUI und öffnet sich nur für Slots echter Gebäude (Kombinator, Anforderungen). Mods können nur seine Bausteine nutzen.
+
+- Nachbau mit den Original-Styles: `editor_mode_selection_table` + `filter_group_button_tab_slightly_larger` (Gruppen-Tabs, `toggled` = ausgewählt), `deep_slots_scroll_pane` + `slot_table` (eine Zeile pro Untergruppe, Kachelhintergrund), Qualitätsknöpfe (nur erforschte, `force.is_quality_unlocked`), `slider` + `slider_value_textfield` + `item_and_count_select_confirm` mit `utility/check_mark_white`, Suche über Titelleisten-Lupe (`search_popup_textfield`)
+- 6 Tabs à 75 px → Raster 11 Spalten breit statt 10 wie im Original
+- Suche über übersetzte Namen: `scripts/translate.lua` (`request_translations`, `on_string_translated`, neu bei Sprachwechsel)
+- Ziel im Panel ist ein Slot: links Dialog, rechts leeren
+- Klick-Sound: genau beim Feldwechsel, still solange Felder schneller als alle 3 Frames wechseln (User: „nicht in sync“)
