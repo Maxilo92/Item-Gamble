@@ -486,7 +486,7 @@ function gui.tick()
       spin.frame = spin.frame + 1
       local elems = data.elems
       local panel_open = elems ~= nil and elems.panel.valid
-      if spin.frame >= reel.DURATION then
+      if spin.frame >= spin.reel.duration then
         local result = gamble.finish(player, data)
         if result.won then
           player.play_sound({ path = "utility/achievement_unlocked" })

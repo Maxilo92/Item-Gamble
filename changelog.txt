@@ -1,4 +1,15 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.7.0
+Date: 2026-10-07
+  Features:
+    - Spins vary in length. Short, brisk spins are almost always a miss. Long spins crawl slowly
+      at the end so every click is audible - usually a win, sometimes a painful near miss.
+    - Near misses: the reel hangs on the edge of a win field for a moment and then tips back onto
+      the miss, or slips off a win field it had just reached.
+    - Close wins: after a long spin the win field creeps over the edge, hangs there briefly and
+      then clicks into place.
+    - No extra effects; the tension comes only from speed, pauses and the clicks.
+---------------------------------------------------------------------------------------------------
 Version: 0.6.1
 Date: 2026-10-07
   Changes:

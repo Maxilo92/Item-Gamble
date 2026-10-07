@@ -130,3 +130,13 @@ User: kein Gebäude zum Gamblen (zumindest noch nicht), aber so viel Vanilla wie
 
 - Zielwahl wieder über `choose-elem-button` (`item-with-quality`): das ist der echte Vanilla-Auswähler, inkl. Suche über übersetzte Namen. Menge im Textfeld direkt daneben
 - Menge im selben Dialog wie beim Kombinator gibt es nur für Entitäten (Anforderungs-/Kombinator-Slots); ohne Gebäude nicht möglich. Falls später doch ein „Glücksautomat“ kommt: `logistic-container` (requester) mit `inventory_size = 1`, `max_logistic_slots = 1` liefert Einsatz-Slot und Kombinator-Dialog komplett Vanilla, Anforderungen per `LuaLogisticPoint.enabled = false` abschalten
+
+### 0.7.0: Spannung
+
+User: spannender, aber nicht überladen; Near Misses, zufällige Spin-Zeiten; lange Spins sollen sich nach Gewinn anfühlen, kurze nach Niete.
+
+- `reel.plan` wählt Art und Länge: Gewinn → 65 % lang / 35 % normal; Niete → 35 % „fast drauf“ (Gewinnfeld direkt dahinter), 20 % „gerade abgerutscht“ (Gewinnfeld direkt davor), 45 % klare Niete (75 % kurz)
+- Stufen: kurz ~3,3 s, normal ~4,5 s, lang ~6,6 s (Auslaufen mit Potenz 4 = langes Kriechen)
+- Knappe Fälle stehen 0,42–0,47 Felder daneben, hängen dort (lang 40, normal 12 Frames) und rasten dann ein. Unter 0,5 bleibt das Ergebnisfeld immer das nächstgelegene
+- Gemessen (gemischte Chancen): lange Drehs ~58 % Gewinne. Bei kleinen Chancen sind lange Drehs fast immer Beinahe-Treffer (das klassische Necken)
+- Keine zusätzlichen Effekte, nur Tempo, Pausen und die vorhandenen Klicks

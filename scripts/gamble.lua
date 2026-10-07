@@ -54,6 +54,10 @@ function gamble.init()
     migrate(player_index, data)
     data.elems = nil
     data.picker = nil
+    -- Walzenplan aus älterer Version ohne Dauer: im nächsten Tick auflösen
+    if data.spin and not data.spin.reel.duration then
+      data.spin.reel.duration = 0
+    end
   end
 end
 
