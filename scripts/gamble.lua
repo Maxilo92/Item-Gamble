@@ -306,6 +306,11 @@ function gamble.spin(player, data)
     slot.count = slot.count - state.stake.count
   end
   local won = storage.rng() < state.chance
+  local consolation = {
+    density = settings.global["item-gamble-consolation-chance"].value,
+    pick = values.prize_picker(storage.rng, state.stake_value),
+  }
+  local plan = reel.plan(storage.rng, won, state.chance, consolation)
   data.last = nil
   data.spin = {
     won = won,
@@ -315,7 +320,9 @@ function gamble.spin(player, data)
     count = state.count,
     stake = state.stake,
     frame = 0,
-    reel = reel.plan(storage.rng, won, state.chance),
+    reel = plan,
+    -- Landet die Walze bei einer Niete auf einem Trostpreis, gibt es ihn
+    prize = not won and reel.prize(plan, plan.stop) or nil,
   }
   storage.spins[player.index] = true
   return state
@@ -330,8 +337,12 @@ function gamble.finish(player, data)
   end
   data.spin = nil
   storage.spins[player.index] = nil
+  local paid = result.prize
   if result.won then
-    local prize = { name = result.name, quality = result.quality, count = result.count }
+    paid = { name = result.name, quality = result.quality, count = result.count }
+  end
+  if paid then
+    local prize = { name = paid.name, quality = paid.quality, count = paid.count }
     local inserted = data.output_inventory.insert(prize)
     -- Passt nur, wenn der Slot inzwischen belegt wurde (z.B. Abbruch beim Schließen)
     if inserted < prize.count then

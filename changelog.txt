@@ -1,4 +1,11 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.12.0
+Date: 2026-10-07
+  Changes:
+    - Consolation prizes: on a share of the losing fields of the wheel (35 %, mod setting) lies a
+      random item worth about a tenth or a hundredth of the stake. If the wheel stops on one you
+      get it despite the miss, the other fields stay empty. Set the share to 0 to switch it off.
+---------------------------------------------------------------------------------------------------
 Version: 0.11.2
 Date: 2026-10-07
   Changes:

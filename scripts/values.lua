@@ -481,6 +481,42 @@ function values.is_selectable(name)
     and values.unit("item", name) ~= nil
 end
 
+-- Trostpreise: Fabrik für Preise, die ein Zehntel oder Hundertstel des Einsatzwerts
+-- wert sind. Jeder Aufruf der zurückgegebenen Funktion würfelt einen Preis
+-- {name, quality, count}, nil wenn nichts so Billiges existiert. Die Liste ist
+-- nach Namen sortiert, damit die Würfe in jeder Mehrspielerinstanz gleich ausgehen.
+local PRIZE_BAND = 20   -- Preise bevorzugt aus höchstens so vielen Stück pro Einsatzbruchteil
+function values.prize_picker(rng, stake_value)
+  local pool = {}
+  for k, unit in pairs(storage.values.value) do
+    local name = k:match("^item/(.+)$")
+    if name and unit > 0 and values.is_selectable(name) then
+      pool[#pool + 1] = { name = name, unit = unit }
+    end
+  end
+  table.sort(pool, function(a, b) return a.name < b.name end)
+  return function()
+    local budget = stake_value * (rng() < 0.5 and 0.1 or 0.01)
+    local band, cheap = {}, {}
+    for _, item in ipairs(pool) do
+      if item.unit <= budget then
+        cheap[#cheap + 1] = item
+        if item.unit * PRIZE_BAND >= budget then
+          band[#band + 1] = item
+        end
+      end
+    end
+    local from = #band > 0 and band or cheap
+    if #from == 0 then
+      return nil
+    end
+    local item = from[rng(1, #from)]
+    local count = math.floor(budget / item.unit + 0.5)
+    count = math.max(1, math.min(count, prototypes.item[item.name].stack_size))
+    return { name = item.name, quality = "normal", count = count }
+  end
+end
+
 -- Gewinnchance für einen Einsatz- und einen Zielwert.
 -- Gibt chance, r, grund zurück. grund ist nil, "no-value", "lower" (Ziel billiger
 -- als Einsatz, gesperrt) oder "below-min" (Chance unter der Minimalchance).

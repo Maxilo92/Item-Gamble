@@ -328,11 +328,17 @@ local function draw_reel(elems, plan, shown, position)
     elems.reel_first = first
     elems.reel_plan = plan
     for k, button in ipairs(slots) do
+      local prize = plan and reel.prize(plan, first + k - 1)
       if plan and reel.is_win(plan, first + k - 1) then
         button.style = "yellow_slot_button"
         button.sprite = "item/" .. shown.name
         button.quality = shown.quality
         button.number = shown.count
+      elseif prize then
+        button.style = "slot_button"
+        button.sprite = "item/" .. prize.name
+        button.quality = prize.quality
+        button.number = prize.count
       else
         button.style = "slot_button"
         button.sprite = ""
@@ -370,6 +376,12 @@ end
 
 local function result_caption(last)
   if not last.won then
+    local prize = last.prize
+    if prize then
+      local text = last.spilled and last.spilled > 0 and "item-gamble.result-consolation-spilled"
+        or "item-gamble.result-consolation"
+      return { text, prize.count, rich_item(prize.name, prize.quality), last.spilled }, "bold_label"
+    end
     return { "item-gamble.result-lost" }, "bold_red_label"
   end
   local icon = rich_item(last.name, last.quality)

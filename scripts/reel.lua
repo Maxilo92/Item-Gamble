@@ -61,6 +61,11 @@ function reel.is_win(plan, index)
   return index % plan.period == plan.phase
 end
 
+-- Trostpreis auf diesem Feld (nur Nieten-Felder), sonst nil
+function reel.prize(plan, index)
+  return plan.fill and not reel.is_win(plan, index) and plan.fill[index] or nil
+end
+
 -- So weit hinaus werden Gewinnfelder gelegt; deckt den längsten Weg plus Sichtfeld
 local LAST_INDEX = 140
 
@@ -94,9 +99,18 @@ local function choose_kind(rng, won)
 end
 
 -- Plant einen Dreh. rng ist storage.rng, damit auch die Optik deterministisch ist.
-function reel.plan(rng, won, chance)
+function reel.plan(rng, won, chance, consolation)
   local period = period_for(chance)
   local plan = { period = period, wins = place_wins(rng, period) }
+  -- Trostpreise auf einem Teil der Nieten-Felder, der Rest bleibt leer
+  if consolation and consolation.density > 0 then
+    plan.fill = {}
+    for index = 0, LAST_INDEX do
+      if not plan.wins[index] and rng() < consolation.density then
+        plan.fill[index] = consolation.pick()
+      end
+    end
+  end
   local kind, tier_name = choose_kind(rng, won)
   local tier = TIERS[tier_name]
 

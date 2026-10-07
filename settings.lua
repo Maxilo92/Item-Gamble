@@ -35,4 +35,13 @@ data:extend({
     maximum_value = 10,
     order = "d",
   },
+  {
+    type = "double-setting",
+    name = "item-gamble-consolation-chance",
+    setting_type = "runtime-global",
+    default_value = 0.35,
+    minimum_value = 0,
+    maximum_value = 1,
+    order = "e",
+  },
 })
