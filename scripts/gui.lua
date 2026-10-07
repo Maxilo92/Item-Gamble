@@ -400,7 +400,8 @@ local function draw_reel(elems, plan, shown, position)
         button.style = "green_slot"
         button.sprite = "utility/refresh"
         button.quality = nil
-        button.number = prize.freespin > 1 and prize.freespin or nil
+        -- Ein Freispin übernimmt den Multiplikator des Drehs
+        button.number = (shown.multi or 1) > 1 and shown.multi or nil
       elseif prize then
         button.style = "slot_button"
         button.sprite = "item/" .. prize.name
@@ -455,7 +456,8 @@ local function result_caption(last)
     text = { "item-gamble.result-won", wins * last.count, rich_item(last.name, last.quality) }
     style = "bold_green_label"
   elseif freespins > 0 then
-    text = { "item-gamble.result-freespins", freespins }
+    local multi = last.multi or 1
+    text = multi > 1 and { "item-gamble.result-freespin-multi", multi } or { "item-gamble.result-freespin" }
     style = "bold_green_label"
     if #prizes > 0 then
       text = { "", text, "  ", { "item-gamble.result-plus-prize", prizes[1].count,
@@ -577,7 +579,7 @@ function gui.refresh(player, typing)
   local free = not spinning and gamble.next_freespin(data)
 
   -- Multiplikator: vervielfacht Einsatz und Gewinn, die Gesamtmengen stehen neben den Slots
-  local multi = spinning and (data.spin.multi or 1) or state.multi
+  local multi = spinning and (data.spin.multi or 1) or free and (free.multi or 1) or state.multi
     or math.max(1, math.min(math.floor(data.multi or 1), gamble.MAX_MULTI))
   elems.multi.caption = "×" .. multi
   elems.multi.enabled = not spinning and not free
@@ -591,8 +593,10 @@ function gui.refresh(player, typing)
   if spinning then
     set_label(chance, chance_caption(data.spin.chance), "heading_2_label")
   elseif free then
-    set_label(chance, { "item-gamble.freespin-bet", free.stake.count, rich_item(free.stake.name, free.stake.quality),
-      free.count, rich_item(free.name, free.quality), chance_caption(free.chance) }, "bold_green_label")
+    local free_multi = free.multi or 1
+    set_label(chance, { "item-gamble.freespin-bet", free.stake.count * free_multi,
+      rich_item(free.stake.name, free.stake.quality), free.count * free_multi, rich_item(free.name, free.quality),
+      chance_caption(free.chance) }, "bold_green_label")
   elseif PROBLEM_KEYS[state.problem] then
     set_label(chance, problem_caption(state, data), "bold_red_label")
   elseif HINT_KEYS[state.problem] then

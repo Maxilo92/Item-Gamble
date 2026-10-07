@@ -375,11 +375,12 @@ end
 
 -- ── Freispins ───────────────────────────────────────────────────────────────
 --
--- Eine Niete kann Freispins bringen. Ein Freispin spielt genau die Wette, mit der er
--- gewonnen wurde (Einsatz, Ziel, Menge, Chance), nur ohne Kosten - sonst könnte man
--- Freispins mit billigen Wetten sammeln und auf teure umschalten. Eine ×N-Niete würfelt
--- N-mal, jeder Freispin ist eine ×1-Wette: pro eingesetztem Item bringt der
--- Multiplikator genauso viel Freispin-Wert wie ×1, nur gleichmäßiger.
+-- Eine Niete kann einen Freispin bringen. Ein Freispin spielt genau die Wette, mit der
+-- er gewonnen wurde (Einsatz, Ziel, Menge, Chance, Multiplikator), nur ohne Kosten -
+-- sonst könnte man Freispins mit billigen Wetten sammeln und auf teure umschalten.
+-- Wie am Spielautomaten bringt ein ×N-Dreh ×N-Freispins; gewürfelt wird dafür nur
+-- einmal, so ist ein Freispin pro eingesetztem Item bei jedem Multiplikator gleich viel
+-- wert.
 --
 -- Balance: Eine Wette bringt im Schnitt Maximum × Wertfaktor (Standard 50 %) des
 -- Einsatzwerts zurück, ein Freispin ist so viel wert. Bei Freispin-Chance p und
@@ -391,7 +392,7 @@ gamble.MAX_FREESPINS = 100   -- mehr sammeln sich nicht an
 local function same_bet(a, b)
   return a.stake.name == b.stake.name and a.stake.quality == b.stake.quality
     and a.stake.count == b.stake.count and a.name == b.name and a.quality == b.quality
-    and a.count == b.count and math.abs(a.chance - b.chance) < 1e-9
+    and a.count == b.count and (a.multi or 1) == (b.multi or 1) and math.abs(a.chance - b.chance) < 1e-9
 end
 
 function gamble.freespins_left(data)
@@ -421,6 +422,7 @@ local function add_freespins(data, bet, count)
     quality = bet.quality,
     count = bet.count,
     chance = bet.chance,
+    multi = bet.multi or 1,
     left = count,
   }
 end
@@ -464,7 +466,7 @@ function gamble.spin(player, data)
       quality = free.quality,
       count = free.count,
       chance = free.chance,
-      multi = 1,
+      multi = free.multi or 1,
       free = true,
     }
   else
@@ -491,8 +493,8 @@ function gamble.spin(player, data)
   end
   local multi = bet.multi
 
-  -- Ein Wurf: Gewinn, sonst eventuell Freispins und ein Trostpreis, beides je
-  -- Multiplikator-Stufe gewürfelt bzw. vervielfacht.
+  -- Ein Wurf: Gewinn, sonst eventuell ein Freispin (mit diesem Multiplikator) und ein
+  -- Trostpreis (mal Multiplikator).
   local rng = storage.rng
   local density = settings.global["item-gamble-consolation-chance"].value
   local freespin_chance = settings.global["item-gamble-freespin-chance"].value
@@ -500,10 +502,8 @@ function gamble.spin(player, data)
   local won = rng() < bet.chance
   local prize, freespins = nil, 0
   if not won then
-    for _ = 1, multi do
-      if rng() < freespin_chance then
-        freespins = freespins + 1
-      end
+    if rng() < freespin_chance then
+      freespins = 1
     end
     if density > 0 and rng() < density then
       prize = pick()

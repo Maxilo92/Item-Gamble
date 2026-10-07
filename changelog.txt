@@ -1,4 +1,12 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.22.0
+Date: 2026-10-07
+  Changes:
+    - Free spins keep the multiplier of the spin that won them, like on a slot machine: a x20 miss
+      gives a x20 free spin. In return a miss rolls the free spin chance only once instead of once
+      per multiplier step, so a free spin is worth the same per staked item at every multiplier.
+      Changing the multiplier afterwards does not change pending free spins.
+---------------------------------------------------------------------------------------------------
 Version: 0.21.0
 Date: 2026-10-07
   Features:

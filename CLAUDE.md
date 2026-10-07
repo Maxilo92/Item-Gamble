@@ -257,6 +257,14 @@ User: Niete kann zu 5 % ein Freispin sein, bei Multiplikator mehr Freispins, kor
 - Walze: grüne Felder (`green_slot`, `utility/refresh`), Stoppfeld `{freespin = n}`
 - Im Spiel gemessen (Testkopie mit angehängter Simulation, `--benchmark`): Rückfluss 52–56 % inkl. Trostpreisen, Missbrauch (billig erspielen, teuer umstellen) greift nicht
 
+### 0.22.0: Freispins mit Multiplikator
+
+User: „Multiplier sollen auf Freispin anwendbar sein“ → nachgefragt, gewählt: wie beim Auslöser (Spielautomat).
+
+- Freispin-Wette merkt sich `multi`; eine Niete würfelt nur noch **einmal** (vorher N-mal mit ×1-Freispins). Gleicher Wert pro Einsatz bei jedem Multiplikator
+- Verworfene Alternative: Multiplikator beim Freispin frei wählbar, Rest aus dem Einsatz bezahlt
+- Gemessen: Rückfluss unverändert 52–57 %, ×1-Freispin bleibt ×1 nach Umstellen auf ×100
+
 ### Arbeitsweise Cloud vs. lokal
 
 - In der Cloud gibt es kein Factorio. Der Push erreicht den lokalen Mod-Ordner (Junction) nur nach `git pull`, danach Factorio komplett neu starten (neue Einstellungen!) und `/gamble-recalc`
