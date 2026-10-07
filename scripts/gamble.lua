@@ -173,6 +173,29 @@ function gamble.track_stake(data)
   end
 end
 
+-- Gewinn-Bereich ins Inventar räumen: alles, oder mit like nur die Sorte (Item und
+-- Qualität) dieses Stacks, wie Strg-Klick im Spiel. Was nicht passt, bleibt liegen.
+function gamble.take_output(player, data, like)
+  local inventory = player.get_main_inventory()
+  if not inventory then
+    return
+  end
+  local name = like and like.valid_for_read and like.name
+  local quality = name and like.quality.name
+  local output = data.output_inventory
+  for i = 1, #output do
+    local slot = output[i]
+    if slot.valid_for_read and (not name or (slot.name == name and slot.quality.name == quality)) then
+      local inserted = inventory.insert(slot)
+      if inserted >= slot.count then
+        slot.clear()
+      elseif inserted > 0 then
+        slot.count = slot.count - inserted
+      end
+    end
+  end
+end
+
 -- Klick auf einen Slot im Panel, wie bei Vanilla-Slots:
 --   Links: ablegen, aufnehmen, tauschen    Rechts: ein Item ablegen / halben Stack nehmen
 --   Shift: ins Inventar

@@ -232,6 +232,14 @@ User: „20 Promethium für 600 Brennelemente zu über 70 %?! Das muss seltener 
 - Einstellung `item-gamble-stake-value-factor` (Standard 0,5): `chance = max × faktor / r`. „lower“ prüft weiter mit dem vollen Wert, gespielt wird also immer um mehr als den Einsatz. Höchstchance effektiv 37,5 %, Rückfluss im Schnitt 37,5 % (+ Trostpreise ~2 %)
 - Nebenwirkung: Der Kalibrierpunkt 1 rot → 100 Promethium liegt jetzt bei halber Chance, also unter der Minimalchance (gesperrt). Falls gewünscht: Minimalchance auf 0,000005 senken
 
+### 0.19.0: Alles abholen, Portal-Release
+
+User: „push und mach die Mod fertig fürs Mod-Portal“, dazu: viele Gewinn-Slots müssen sich leicht leeren lassen.
+
+- `gamble.take_output(player, data, like)`: Knopf „Alles abholen“ links in der unteren Leiste (`dialog_button`, aus wenn der Bereich leer ist), Strg-Klick auf einen Gewinn holt diese Sorte
+- Portal-Check: Changelog-Format geprüft (99 Striche, Kategorien, keine Doppelversionen), Headless-Ladetest mit der Release-Zip (frische Karte, Space Age, on_init + Wertberechnung ohne Fehler), keine Chat-Ausgaben beim Start, README als Portal-Beschreibung aktualisiert
+- Hochladen macht der User selbst (Portal-Login); Zip aus `tools/pack_mod.py` in `dist/`
+
 ### Arbeitsweise Cloud vs. lokal
 
 - In der Cloud gibt es kein Factorio. Der Push erreicht den lokalen Mod-Ordner (Junction) nur nach `git pull`, danach Factorio komplett neu starten (neue Einstellungen!) und `/gamble-recalc`

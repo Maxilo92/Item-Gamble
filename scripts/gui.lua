@@ -41,6 +41,7 @@ local NAMES = {
   target_slider = "item_gamble_target_slider",
   target_amount = "item_gamble_target_amount",
   multi = "item_gamble_multi",
+  take_all = "item_gamble_take_all",
   spin = "item_gamble_spin",
   picker_close = "item_gamble_picker_close",
   picker_search_button = "item_gamble_picker_search_button",
@@ -279,6 +280,14 @@ local function build_window(player, data)
   local output_table = output_frame.add({ type = "table", style = "slot_table", column_count = gamble.OUTPUT_COLUMNS })
 
   local buttons = window.add({ type = "flow", style = "dialog_buttons_horizontal_flow" })
+  -- Links wie der Zurück-Knopf in Vanilla-Dialogen: Gewinne ins Inventar räumen
+  local take_all = buttons.add({
+    type = "button",
+    name = NAMES.take_all,
+    style = "dialog_button",
+    caption = { "item-gamble.take-all" },
+    tooltip = { "item-gamble.take-all-tooltip" },
+  })
   local filler = buttons.add({ type = "empty-widget", style = "draggable_space", ignored_by_interaction = true })
   filler.style.horizontally_stretchable = true
   filler.style.height = 32
@@ -325,6 +334,7 @@ local function build_window(player, data)
     reel_slots = reel_slots,
     result = result,
     multi = multi,
+    take_all = take_all,
     spin = spin,
   }
 end
@@ -519,6 +529,7 @@ function gui.refresh(player, typing)
     state = gamble.evaluate(data)
   end
   refresh_output(data, elems)
+  elems.take_all.enabled = not data.output_inventory.is_empty()
   local spinning = data.spin ~= nil
   -- Gespeicherte Mengen auf den gültigen Bereich ziehen, außer während des Tippens
   if state.stake and typing ~= NAMES.stake_amount then
@@ -936,8 +947,17 @@ local function on_click(event)
     -- Der Bereich kann seit dem Aufbau geschrumpft sein
     local index = tags[TAGS.output]
     if index <= #data.output_inventory then
-      gamble.click_slot(player, data.output_inventory[index], event, false)
+      local slot = data.output_inventory[index]
+      if event.control then
+        -- Wie im Spiel: Strg-Klick holt alle Items dieser Sorte
+        gamble.take_output(player, data, slot)
+      else
+        gamble.click_slot(player, slot, event, false)
+      end
     end
+    gui.refresh(player)
+  elseif name == NAMES.take_all then
+    gamble.take_output(player, data)
     gui.refresh(player)
   elseif name == NAMES.multi then
     if data.spin then
