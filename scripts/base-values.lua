@@ -15,6 +15,15 @@ return {
   -- Das Gewicht ist eine Mod-Einstellung, die Skala steht hier.
   progress_scale = 1000,
 
+  -- Mindestwerte (Endwert inkl. Fortschritt). Greifen nur, wenn die Rezepte zu billig sind,
+  -- z.B. bei Wissenschaftspaketen, die kaum Rohstoffe brauchen (5 Weltraumpakete aus 2 Eisen,
+  -- 1 Kohlenstoff, 1 Eis). Reihenfolge soll stimmen: Chemie 105 < Weltraum < Produktion/Nutzen ~470 < Kryo.
+  min_value = {
+    ["item/space-science-pack"] = 250,
+    ["item/agricultural-science-pack"] = 200,
+    ["item/cryogenic-science-pack"] = 700,
+  },
+
   -- Rohstoffe aus anderen Mods, die hier fehlen und für die es kein Rezept gibt
   -- (abbaubare Ressourcen, Bäume, Pflanzen, Fische, Asteroidenbrocken, Flüssigkeiten von Böden)
   auto_item = 1,
@@ -47,6 +56,11 @@ return {
 
     -- Nauvis-Biter (Gefangener Spawner: das Rezept hat keine Zutaten)
     ["biter-egg"] = 165,
+
+    -- Samen: 2 % Ausbeute aus einer Frucht ergab ~126, das ist viel zu viel
+    -- (zum Vergleich: Baumsamen ~5,5). Als Grundwert sind sie ein günstiges Nebenprodukt.
+    ["yumako-seed"] = 10,
+    ["jellynut-seed"] = 10,
 
     -- Weltraum
     ["metallic-asteroid-chunk"] = 5,

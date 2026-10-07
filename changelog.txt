@@ -1,4 +1,12 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.11.1
+Date: 2026-10-07
+  Changes:
+    - Balancing pass based on the first full value list: yumako and jellynut seeds were worth ~126
+      each, now they are a cheap by-product (10).
+    - Space, agricultural and cryogenic science packs were barely worth more than the red pack
+      or less than military. They now have minimum values (250, 200, 700) so the order feels right.
+---------------------------------------------------------------------------------------------------
 Version: 0.11.0
 Date: 2026-10-07
   Changes:

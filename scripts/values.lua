@@ -286,6 +286,12 @@ local function relax(recipes, excluded, state, credit_material, machines, weight
           for _, target in ipairs(recipe.targets) do
             local m = share / target.amount
             local candidate = m * factor
+            -- Mindestwert (base-values.lua): Material mit hochziehen, damit es konsistent weitergereicht wird
+            local floor = base.min_value[target.key]
+            if floor and candidate < floor then
+              candidate = floor
+              m = floor / factor
+            end
             local current = value[target.key]
             if candidate > 0 and (not current or candidate < current * (1 - EPSILON)) then
               value[target.key] = candidate
