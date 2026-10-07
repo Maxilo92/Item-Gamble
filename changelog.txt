@@ -1,4 +1,15 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.13.0
+Date: 2026-10-07
+  Changes:
+    - The prize area has 10 slots instead of one. Prizes, consolation prizes and wins of several
+      spins have room, only a completely full area blocks the spin. Old single-slot content moves
+      over automatically.
+    - New "Spins" row (slider and field): spin up to 100 times at once, as far as the stake lasts.
+      Every spin stakes the amount per spin and rolls on its own. The wheel shows a win if any
+      spin won, otherwise a consolation prize or an empty field. The result line sums up wins and
+      consolation prizes.
+---------------------------------------------------------------------------------------------------
 Version: 0.12.0
 Date: 2026-10-07
   Changes:

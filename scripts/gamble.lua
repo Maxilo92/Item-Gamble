@@ -11,6 +11,9 @@ local reel = require("scripts.reel")
 
 local gamble = {}
 
+gamble.OUTPUT_SLOTS = 10   -- Gewinn-Slots im Panel
+gamble.MAX_SPINS = 100     -- Drehs pro Knopfdruck
+
 -- Spieler bekommt Items, was nicht passt, fällt vor der Spielfigur auf den Boden.
 -- stack ist ein LuaItemStack oder eine Tabelle {name, quality, count}.
 local function give(player, stack)
@@ -75,8 +78,19 @@ function gamble.get(player_index)
   if not (data.stake_inventory and data.stake_inventory.valid) then
     data.stake_inventory = game.create_inventory(1)
   end
-  if not (data.output_inventory and data.output_inventory.valid) then
-    data.output_inventory = game.create_inventory(1)
+  local output = data.output_inventory
+  if not (output and output.valid) then
+    data.output_inventory = game.create_inventory(gamble.OUTPUT_SLOTS)
+  elseif #output ~= gamble.OUTPUT_SLOTS then
+    -- Gewinn-Slot aus 0.12.0 und früher hatte nur einen Platz: Inhalt umziehen
+    local bigger = game.create_inventory(gamble.OUTPUT_SLOTS)
+    for i = 1, #output do
+      if output[i].valid_for_read then
+        bigger.insert(output[i])
+      end
+    end
+    output.destroy()
+    data.output_inventory = bigger
   end
   return data
 end
@@ -97,10 +111,14 @@ end
 -- Einsatz und nicht abgeholter Gewinn zurück ins Inventar, Rest auf den Boden
 function gamble.return_items(player, data)
   for _, inventory in pairs({ data.stake_inventory, data.output_inventory }) do
-    local slot = inventory and inventory.valid and inventory[1]
-    if slot and slot.valid_for_read then
-      give(player, slot)
-      slot.clear()
+    if inventory and inventory.valid then
+      for i = 1, #inventory do
+        local slot = inventory[i]
+        if slot.valid_for_read then
+          give(player, slot)
+          slot.clear()
+        end
+      end
     end
   end
 end
@@ -225,16 +243,11 @@ function gamble.click_inventory(player, data, index, event)
   end
 end
 
--- Kann der Gewinn-Slot einen Gewinn annehmen? Gesperrt ist er nur, wenn ein anderes
--- Item darin liegt oder der Stack voll ist - wie eine Maschine mit voller Ausgabe.
--- Was beim Gewinn nicht mehr hineinpasst, geht ins Inventar.
+-- Kann der Gewinn-Bereich das Ziel noch annehmen? Gesperrt ist er nur, wenn kein
+-- Slot mehr frei ist und kein Stapel des Ziels Platz hat - wie eine Maschine mit
+-- voller Ausgabe. Was beim Gewinn nicht mehr hineinpasst, geht ins Inventar.
 local function output_accepts(data, target)
-  local slot = data.output_inventory[1]
-  if not slot.valid_for_read then
-    return true
-  end
-  return slot.name == target.name and slot.quality.name == target.quality
-    and slot.count < slot.prototype.stack_size
+  return data.output_inventory.can_insert({ name = target.name, quality = target.quality, count = 1 })
 end
 
 -- Alles, was das Fenster anzeigt und der Dreh braucht.
@@ -255,6 +268,9 @@ function gamble.evaluate(data)
       available = slot.count,
       spoil = slot.spoil_percent,
     }
+    -- Mehrere Drehs auf einmal, soweit der Vorrat reicht
+    state.max_spins = math.max(1, math.min(gamble.MAX_SPINS, math.floor(slot.count / count)))
+    state.spins = math.max(1, math.min(math.floor(data.multi or 1), state.max_spins))
     if values.is_selectable(slot.name) and not has_equipment(slot) then
       state.stake_value = values.stack(slot.name, slot.quality.name, count, slot.spoil_percent)
     end
@@ -300,20 +316,48 @@ function gamble.spin(player, data)
   end
 
   local slot = data.stake_inventory[1]
-  if state.stake.count >= slot.count then
+  local spent = state.stake.count * state.spins
+  if spent >= slot.count then
     slot.clear()
   else
-    slot.count = slot.count - state.stake.count
+    slot.count = slot.count - spent
   end
-  local won = storage.rng() < state.chance
-  local consolation = {
-    density = settings.global["item-gamble-consolation-chance"].value,
-    pick = values.prize_picker(storage.rng, state.stake_value),
-  }
-  local plan = reel.plan(storage.rng, won, state.chance, consolation)
+
+  -- Jeder Dreh würfelt einzeln: Gewinn, sonst eventuell ein Trostpreis
+  local rng = storage.rng
+  local density = settings.global["item-gamble-consolation-chance"].value
+  local pick = values.prize_picker(rng, state.stake_value)
+  local wins, prizes, by_key, first_prize = 0, {}, {}, nil
+  for _ = 1, state.spins do
+    if rng() < state.chance then
+      wins = wins + 1
+    elseif density > 0 and rng() < density then
+      local prize = pick()
+      if prize then
+        first_prize = first_prize or prize
+        local key = prize.name .. "/" .. prize.quality
+        if by_key[key] then
+          by_key[key].count = by_key[key].count + prize.count
+        else
+          by_key[key] = { name = prize.name, quality = prize.quality, count = prize.count }
+          prizes[#prizes + 1] = by_key[key]
+        end
+      end
+    end
+  end
+  local won = wins > 0
+
+  -- Die Walze zeigt das Ergebnis: ein Gewinn, sonst ein Trostpreis oder ein leeres Feld
+  local plan = reel.plan(rng, won, state.chance, { density = density, pick = pick })
+  if not won and (first_prize or plan.fill) then
+    plan.fill = plan.fill or {}
+    plan.fill[plan.stop] = first_prize
+  end
   data.last = nil
   data.spin = {
     won = won,
+    wins = wins,
+    spins = state.spins,
     chance = state.chance,
     name = data.target.name,
     quality = data.target.quality,
@@ -321,8 +365,7 @@ function gamble.spin(player, data)
     stake = state.stake,
     frame = 0,
     reel = plan,
-    -- Landet die Walze bei einer Niete auf einem Trostpreis, gibt es ihn
-    prize = not won and reel.prize(plan, plan.stop) or nil,
+    prizes = prizes,
   }
   storage.spins[player.index] = true
   return state
@@ -337,18 +380,27 @@ function gamble.finish(player, data)
   end
   data.spin = nil
   storage.spins[player.index] = nil
-  local paid = result.prize
-  if result.won then
-    paid = { name = result.name, quality = result.quality, count = result.count }
-  end
-  if paid then
-    local prize = { name = paid.name, quality = paid.quality, count = paid.count }
-    local inserted = data.output_inventory.insert(prize)
-    -- Passt nur, wenn der Slot inzwischen belegt wurde (z.B. Abbruch beim Schließen)
-    if inserted < prize.count then
-      prize.count = prize.count - inserted
-      result.spilled = give(player, prize)
+  -- Gewinne und Trostpreise in den Gewinn-Bereich; was nicht passt (z.B. Abbruch beim
+  -- Schließen, viele Drehs), ins Inventar, der Rest auf den Boden
+  local function pay(paid)
+    local stack = { name = paid.name, quality = paid.quality, count = paid.count }
+    local inserted = data.output_inventory.insert(stack)
+    if inserted < stack.count then
+      stack.count = stack.count - inserted
+      return give(player, stack)
     end
+    return 0
+  end
+  local wins = result.wins or (result.won and 1 or 0)
+  if wins > 0 then
+    result.spilled = pay({ name = result.name, quality = result.quality, count = result.count * wins })
+  end
+  -- Trostpreise aus 0.12.0: ein einzelner Preis statt einer Liste
+  local prizes = result.prizes or (result.prize and { result.prize }) or {}
+  result.prizes = prizes
+  result.prize_spilled = 0
+  for _, prize in ipairs(prizes) do
+    result.prize_spilled = result.prize_spilled + pay(prize)
   end
   data.last = result
   return result

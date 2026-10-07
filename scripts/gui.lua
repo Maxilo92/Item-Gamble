@@ -40,6 +40,8 @@ local NAMES = {
   target_slider = "item_gamble_target_slider",
   target_amount = "item_gamble_target_amount",
   output = "item_gamble_output",
+  multi_slider = "item_gamble_multi_slider",
+  multi_amount = "item_gamble_multi_amount",
   spin = "item_gamble_spin",
   picker_close = "item_gamble_picker_close",
   picker_search_button = "item_gamble_picker_search_button",
@@ -50,6 +52,7 @@ local TAGS = {
   group = "item_gamble_group",
   item = "item_gamble_item",
   quality = "item_gamble_quality",
+  output = "item_gamble_output_slot",
 }
 
 local PROBLEM_KEYS = {
@@ -193,10 +196,27 @@ local function build_window(player, data)
   local target_slider, target_amount = amount(NAMES.target_slider, NAMES.target_amount, { "item-gamble.count-tooltip" })
   local target_value = slots.add({ type = "label" })
 
-  slots.add({ type = "label", style = "caption_label", caption = { "item-gamble.output" } })
-  local output = slots.add({ type = "sprite-button", name = NAMES.output, style = "inventory_slot", tooltip = { "item-gamble.output-tooltip" } })
+  slots.add({ type = "label", style = "caption_label", caption = { "item-gamble.multi" } })
   slots.add({ type = "empty-widget" })
-  slots.add({ type = "empty-widget" })
+  local multi_slider, multi_amount = amount(NAMES.multi_slider, NAMES.multi_amount, { "item-gamble.multi-tooltip" })
+  local multi_value = slots.add({ type = "label" })
+
+  -- Gewinn-Bereich: mehrere Slots, damit auch Trostpreise und viele Drehs Platz haben
+  local output_row = content.add({ type = "flow", direction = "horizontal" })
+  local output_label = output_row.add({ type = "label", style = "caption_label", caption = { "item-gamble.output" } })
+  output_label.style.minimal_width = 56
+  local output_frame = output_row.add({ type = "frame", style = "slot_button_deep_frame" })
+  local output_table = output_frame.add({ type = "table", style = "slot_table", column_count = gamble.OUTPUT_SLOTS // 2 })
+  local output_buttons = {}
+  for i = 1, gamble.OUTPUT_SLOTS do
+    output_buttons[i] = output_table.add({
+      type = "sprite-button",
+      name = NAMES.output,
+      style = "inventory_slot",
+      tags = { [TAGS.output] = i },
+      tooltip = { "item-gamble.output-tooltip" },
+    })
+  end
 
   content.add({ type = "line" })
 
@@ -235,6 +255,8 @@ local function build_window(player, data)
 
   local message = content.add({ type = "label" })
   local result = content.add({ type = "label" })
+  result.style.single_line = false
+  result.style.maximal_width = reel.VISIBLE * reel.PITCH
 
   local buttons = window.add({ type = "flow", style = "dialog_buttons_horizontal_flow" })
   local filler = buttons.add({ type = "empty-widget", style = "draggable_space", ignored_by_interaction = true })
@@ -268,7 +290,10 @@ local function build_window(player, data)
     target_slider = target_slider,
     target_amount = target_amount,
     target_value = target_value,
-    output = output,
+    multi_slider = multi_slider,
+    multi_amount = multi_amount,
+    multi_value = multi_value,
+    output_buttons = output_buttons,
     chance = chance,
     reel_slots = reel_slots,
     message = message,
@@ -375,20 +400,44 @@ local function problem_caption(state, data)
 end
 
 local function result_caption(last)
-  if not last.won then
-    local prize = last.prize
-    if prize then
-      local text = last.spilled and last.spilled > 0 and "item-gamble.result-consolation-spilled"
-        or "item-gamble.result-consolation"
-      return { text, prize.count, rich_item(prize.name, prize.quality), last.spilled }, "bold_label"
+  local spins = last.spins or 1
+  local wins = last.wins or (last.won and 1 or 0)
+  local prizes = last.prizes or (last.prize and { last.prize }) or {}
+  local spilled = (last.spilled or 0) + (last.prize_spilled or 0)
+  local text, style
+  if wins > 0 then
+    local icon = rich_item(last.name, last.quality)
+    if spins > 1 then
+      text = { "item-gamble.result-multi-won", wins, spins, wins * last.count, icon }
+    else
+      text = { "item-gamble.result-won", last.count, icon }
     end
+    style = "bold_green_label"
+  elseif spins > 1 then
+    text = { "item-gamble.result-multi-lost", spins }
+    style = #prizes > 0 and "bold_label" or "bold_red_label"
+  elseif #prizes > 0 then
+    text = { "item-gamble.result-consolation", prizes[1].count, rich_item(prizes[1].name, prizes[1].quality) }
+    style = "bold_label"
+  else
     return { "item-gamble.result-lost" }, "bold_red_label"
   end
-  local icon = rich_item(last.name, last.quality)
-  if last.spilled and last.spilled > 0 then
-    return { "item-gamble.result-won-spilled", last.count, icon, last.spilled }, "bold_green_label"
+  -- Trostpreise: bei mehreren Drehs als Liste (die Einzelpreis-Meldung steht schon im Text)
+  if #prizes > 0 and (spins > 1 or wins > 0) then
+    local list = {}
+    for k, prize in ipairs(prizes) do
+      if k > 8 then
+        list[#list + 1] = "…"
+        break
+      end
+      list[#list + 1] = prize.count .. " × " .. rich_item(prize.name, prize.quality)
+    end
+    text = { "", text, " ", { "item-gamble.result-prizes", table.concat(list, ", ") } }
   end
-  return { "item-gamble.result-won", last.count, icon }, "bold_green_label"
+  if spilled > 0 then
+    text = { "", text, " ", { "item-gamble.result-spilled", spilled } }
+  end
+  return text, style
 end
 
 local function show_stack(button, stack)
@@ -433,7 +482,9 @@ function gui.refresh(player, typing)
   refresh_inventory(player, elems)
   gamble.track_stake(data)
   show_stack(elems.stake, data.stake_inventory[1])
-  show_stack(elems.output, data.output_inventory[1])
+  for i, button in ipairs(elems.output_buttons) do
+    show_stack(button, data.output_inventory[i])
+  end
   local state = gamble.evaluate(data)
   local spinning = data.spin ~= nil
   -- Gespeicherte Mengen auf den gültigen Bereich ziehen, außer während des Tippens
@@ -442,6 +493,9 @@ function gui.refresh(player, typing)
   end
   if state.count and typing ~= NAMES.target_amount then
     data.count = state.count
+  end
+  if state.spins and typing ~= NAMES.multi_amount then
+    data.multi = state.spins
   end
 
   local stake = state.stake
@@ -456,6 +510,14 @@ function gui.refresh(player, typing)
     end
   else
     elems.stake_value.caption = ""
+  end
+
+  show_amount(elems.multi_slider, elems.multi_amount, state.spins, state.max_spins,
+    not spinning, typing == NAMES.multi_amount)
+  if state.spins and state.spins > 1 and state.stake_value then
+    elems.multi_value.caption = { "item-gamble.multi-total", format_number(state.stake_value * state.spins) }
+  else
+    elems.multi_value.caption = ""
   end
 
   local target = elems.target
@@ -842,7 +904,7 @@ local function on_click(event)
     gamble.click_slot(player, data.stake_inventory[1], event, true)
     gui.refresh(player)
   elseif name == NAMES.output then
-    gamble.click_slot(player, data.output_inventory[1], event, false)
+    gamble.click_slot(player, data.output_inventory[tags[TAGS.output]], event, false)
     gui.refresh(player)
   elseif name == NAMES.spin then
     gamble.spin(player, data)
@@ -912,6 +974,9 @@ local function on_text_changed(event)
   elseif name == NAMES.target_amount then
     data.count = math.max(1, math.floor(tonumber(element.text) or 1))
     gui.refresh(player, name)
+  elseif name == NAMES.multi_amount then
+    data.multi = math.max(1, math.floor(tonumber(element.text) or 1))
+    gui.refresh(player, name)
   elseif name == NAMES.picker_search and data.picker then
     data.picker.search = string.lower(element.text)
     fill_picker_items(event.player_index, data.picker)
@@ -933,6 +998,8 @@ local function on_value_changed(event)
     data.stake_count = value
   elseif element.name == NAMES.target_slider then
     data.count = value
+  elseif element.name == NAMES.multi_slider then
+    data.multi = value
   else
     return
   end
@@ -942,7 +1009,8 @@ end
 -- Enter oder Fokusverlust: Mengenfeld auf den gültigen Bereich setzen
 local function on_confirmed(event)
   local element = event.element
-  if element and element.valid and (element.name == NAMES.stake_amount or element.name == NAMES.target_amount) then
+  if element and element.valid and (element.name == NAMES.stake_amount or element.name == NAMES.target_amount
+    or element.name == NAMES.multi_amount) then
     gui.refresh(game.get_player(event.player_index))
   end
 end
