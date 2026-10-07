@@ -169,6 +169,62 @@ function gamble.click_slot(player, slot, event, accepts_input)
   end
 end
 
+-- Klick auf einen Slot des eigenen Inventars im Fenster, wie im Spiel:
+--   Links:        aufnehmen (der Slot wird mit der Hand markiert), ablegen, tauschen
+--   Rechts:       halben Stack aufnehmen / ein Item ablegen
+--   Shift:        Stack in den Einsatz (Shift+Rechts: die Hälfte)
+--   Strg:         alle Items dieser Sorte in den Einsatz, bis der Stack voll ist
+function gamble.click_inventory(player, data, index, event)
+  local inventory = player.get_main_inventory()
+  local cursor = player.cursor_stack
+  if not (inventory and cursor and index <= #inventory) then
+    return
+  end
+  local slot = inventory[index]
+  local right = event.button == defines.mouse_button_type.right
+  local stake = data.stake_inventory[1]
+
+  if event.shift or event.control then
+    if not slot.valid_for_read or (stake.valid_for_read and not same_item(stake, slot)) then
+      return
+    end
+    if event.control then
+      local name, quality = slot.name, slot.quality.name
+      for i = 1, #inventory do
+        local stack = inventory[i]
+        if stack.valid_for_read and stack.name == name and stack.quality.name == quality then
+          stake.transfer_stack(stack)
+        end
+      end
+    else
+      stake.transfer_stack(slot, right and math.ceil(slot.count / 2) or nil)
+    end
+    return
+  end
+
+  if cursor.valid_for_read then
+    if right then
+      if not slot.valid_for_read or same_item(slot, cursor) then
+        slot.transfer_stack(cursor, 1)
+      end
+    elseif not slot.valid_for_read or same_item(slot, cursor) then
+      slot.transfer_stack(cursor)
+    else
+      slot.swap_stack(cursor)
+    end
+  elseif slot.valid_for_read then
+    if right then
+      cursor.transfer_stack(slot, math.ceil(slot.count / 2))
+    else
+      cursor.transfer_stack(slot)
+      -- Wie im Spiel: der leere Slot gehört weiter der Hand, Q legt dorthin zurück
+      if cursor.valid_for_read and not slot.valid_for_read then
+        player.hand_location = { inventory = inventory.index, slot = index }
+      end
+    end
+  end
+end
+
 -- Kann der Gewinn-Slot einen Gewinn annehmen? Gesperrt ist er nur, wenn ein anderes
 -- Item darin liegt oder der Stack voll ist - wie eine Maschine mit voller Ausgabe.
 -- Was beim Gewinn nicht mehr hineinpasst, geht ins Inventar.

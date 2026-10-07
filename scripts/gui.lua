@@ -1,9 +1,14 @@
--- Fenster wie bei einem Gebäude: Geöffnet wird das normale Spielfigur-Fenster (wie mit
--- E), rechts daran hängt das Glücksrad-Panel (relative GUI). Ein eigenes Inventar-
--- Fenster ginge nicht ohne einen leeren Inventarkasten daneben.
+-- Eigenes Fenster, aufgebaut wie ein Kistenfenster: links das eigene Inventar, rechts
+-- das Glücksrad (Einsatz-Slot als Vorrat mit Menge pro Dreh, Ziel-Slot mit Menge,
+-- Gewinn-Slot, Chance, Walze), unten Drehen. Das Fenster ist player.opened, E und
+-- Esc schließen es wie jedes andere.
 --
--- Im Panel: Einsatz-Slot (Vorrat) mit Menge pro Dreh, Ziel-Slot mit Menge, Gewinn-
--- Slot, Chance, Walze, Drehen. Einsatz und Gewinn bedient man wie Vanilla-Slots.
+-- Factorios eigenes Inventarfenster lässt sich nicht einbetten: ein geöffnetes
+-- Script-Inventar zeichnet immer einen Inventarkasten daneben, das Spielfigur-Fenster
+-- bringt Logistik und Herstellung mit. Das Inventar-Raster hier zeigt deshalb das
+-- echte Inventar und bewegt echte Items mit der Vanilla-Bedienung (gamble.click_inventory),
+-- inklusive Hand-Markierung des Slots, aus dem man einen Stack genommen hat.
+--
 -- Das Ziel wählt man in einem Dialog nach dem Vorbild von „Signal auswählen“
 -- (dieselben Vanilla-Styles, Suche über übersetzte Namen). Den Original-Dialog
 -- können Mods nicht öffnen, er gehört zu Kombinator- und Anforderungsslots.
@@ -20,11 +25,14 @@ local translate = require("scripts.translate")
 
 local gui = {}
 
-local PANEL = "item_gamble_panel"
+local WINDOW = "item_gamble_window"
 local PICKER = "item_gamble_picker"
+local INVENTORY_COLUMNS = 10
+local INVENTORY_ROWS = 10    -- mehr Zeilen scrollen
 local PICKER_COLUMNS = 11   -- 6 Gruppen-Tabs à 75 px sind so breit wie 11 Slots
 local PICKER_ROWS = 10
 local NAMES = {
+  close = "item_gamble_close",
   stake = "item_gamble_stake",
   stake_slider = "item_gamble_stake_slider",
   stake_amount = "item_gamble_stake_amount",
@@ -38,6 +46,7 @@ local NAMES = {
   picker_search = "item_gamble_picker_search",
 }
 local TAGS = {
+  inventory = "item_gamble_inventory_slot",
   group = "item_gamble_group",
   item = "item_gamble_item",
   quality = "item_gamble_quality",
@@ -93,25 +102,53 @@ local function set_label(label, caption, style)
   label.style.maximal_width = reel.VISIBLE * reel.PITCH
 end
 
--- ── Panel ───────────────────────────────────────────────────────────────────
+-- ── Fenster ─────────────────────────────────────────────────────────────────
 
-local function build_panel(player, data)
-  local panel = player.gui.relative.add({
-    type = "frame",
-    name = PANEL,
-    direction = "vertical",
-    caption = { "item-gamble.panel-title" },
-    anchor = {
-      gui = defines.relative_gui_type.controller_gui,
-      position = defines.relative_gui_position.right,
-    },
+local function build_window(player, data)
+  local window = player.gui.screen.add({ type = "frame", name = WINDOW, direction = "vertical" })
+
+  local titlebar = window.add({ type = "flow", direction = "horizontal" })
+  titlebar.drag_target = window
+  titlebar.style.horizontal_spacing = 8
+  titlebar.add({ type = "label", style = "frame_title", caption = { "item-gamble.window-title" }, ignored_by_interaction = true })
+  local drag = titlebar.add({ type = "empty-widget", style = "draggable_space_header", ignored_by_interaction = true })
+  drag.style.horizontally_stretchable = true
+  drag.style.height = 24
+  drag.style.right_margin = 4
+  titlebar.add({
+    type = "sprite-button",
+    name = NAMES.close,
+    style = "frame_action_button",
+    sprite = "utility/close",
+    tooltip = { "gui.close-instruction" },
   })
 
-  local content = panel.add({
+  local columns = window.add({ type = "flow", direction = "horizontal" })
+  columns.style.horizontal_spacing = 12
+
+  -- Links: das eigene Inventar, wie die linke Hälfte eines Kistenfensters
+  local inventory_frame = columns.add({ type = "frame", style = "inside_shallow_frame_with_padding", direction = "vertical" })
+  inventory_frame.add({ type = "label", style = "caption_label", caption = { "item-gamble.inventory" } })
+  local inventory_scroll = inventory_frame.add({
+    type = "scroll-pane",
+    style = "naked_scroll_pane",
+    horizontal_scroll_policy = "never",
+  })
+  inventory_scroll.style.top_margin = 4
+  inventory_scroll.style.maximal_height = INVENTORY_ROWS * 40
+  local inventory_slots_frame = inventory_scroll.add({ type = "frame", style = "slot_button_deep_frame" })
+  local inventory = inventory_slots_frame.add({ type = "table", style = "slot_table", column_count = INVENTORY_COLUMNS })
+  local no_inventory = inventory_frame.add({ type = "label", caption = { "item-gamble.problem-no-inventory" } })
+  no_inventory.style.single_line = false
+  no_inventory.style.maximal_width = INVENTORY_COLUMNS * 40
+
+  -- Rechts: Glücksrad
+  local content = columns.add({
     type = "frame",
     style = "inside_shallow_frame_with_padding_and_vertical_spacing",
     direction = "vertical",
   })
+  content.style.vertically_stretchable = true
 
   -- Bezeichnung | Slot | Menge (Slider + Zahl) | Wert
   local slots = content.add({ type = "table", column_count = 4 })
@@ -199,9 +236,11 @@ local function build_panel(player, data)
   local message = content.add({ type = "label" })
   local result = content.add({ type = "label" })
 
-  local buttons = panel.add({ type = "flow", style = "dialog_buttons_horizontal_flow" })
-  local filler = buttons.add({ type = "empty-widget" })
+  local buttons = window.add({ type = "flow", style = "dialog_buttons_horizontal_flow" })
+  local filler = buttons.add({ type = "empty-widget", style = "draggable_space", ignored_by_interaction = true })
   filler.style.horizontally_stretchable = true
+  filler.style.height = 32
+  filler.drag_target = window
   local spin = buttons.add({
     type = "button",
     name = NAMES.spin,
@@ -210,8 +249,17 @@ local function build_panel(player, data)
     tooltip = { "item-gamble.spin-tooltip" },
   })
 
+  if data.window_location then
+    window.location = data.window_location
+  else
+    window.auto_center = true
+  end
+
   data.elems = {
-    panel = panel,
+    window = window,
+    inventory = inventory,
+    inventory_buttons = {},
+    no_inventory = no_inventory,
     stake = stake,
     stake_slider = stake_slider,
     stake_amount = stake_amount,
@@ -227,6 +275,48 @@ local function build_panel(player, data)
     result = result,
     spin = spin,
   }
+end
+
+-- Das Inventar-Raster zeigt den echten Inhalt: Item, Qualität, Anzahl, und den Slot,
+-- aus dem die Hand gerade einen Stack trägt. Die Knöpfe bleiben stehen und werden
+-- nur aktualisiert; neu gebaut wird nur, wenn sich die Inventargröße ändert.
+local function refresh_inventory(player, elems)
+  local inventory = player.get_main_inventory()
+  elems.no_inventory.visible = inventory == nil
+  local buttons = elems.inventory_buttons
+  local size = inventory and #inventory or 0
+  if #buttons ~= size then
+    elems.inventory.clear()
+    buttons = {}
+    for index = 1, size do
+      buttons[index] = elems.inventory.add({
+        type = "sprite-button",
+        style = "inventory_slot",
+        tags = { [TAGS.inventory] = index },
+      })
+    end
+    elems.inventory_buttons = buttons
+  end
+  if not inventory then
+    return
+  end
+  local hand = player.hand_location
+  local hand_slot = hand and hand.inventory == inventory.index and hand.slot
+  for index = 1, size do
+    local stack = inventory[index]
+    local button = buttons[index]
+    if stack.valid_for_read then
+      button.sprite = "item/" .. stack.name
+      button.quality = stack.quality.name
+      button.number = stack.count
+      button.elem_tooltip = { type = "item-with-quality", name = stack.name, quality = stack.quality.name }
+    else
+      button.sprite = index == hand_slot and "utility/hand" or ""
+      button.quality = nil
+      button.number = nil
+      button.elem_tooltip = nil
+    end
+  end
 end
 
 -- Walze auf eine Position zeichnen. plan nil = leere Walze.
@@ -325,9 +415,10 @@ end
 function gui.refresh(player, typing)
   local data = storage.players[player.index]
   local elems = data and data.elems
-  if not (elems and elems.panel.valid) then
+  if not (elems and elems.window.valid) then
     return
   end
+  refresh_inventory(player, elems)
   gamble.track_stake(data)
   show_stack(elems.stake, data.stake_inventory[1])
   show_stack(elems.output, data.output_inventory[1])
@@ -535,6 +626,8 @@ local function refresh_picker(pick)
   end
 end
 
+-- Die Zielauswahl ist beim Öffnen player.opened, damit Esc wie im Spiel erst sie
+-- schließt. Danach bekommt das Glücksspiel-Fenster die Rolle zurück.
 local function close_picker(player, data)
   local frame = player.gui.screen[PICKER]
   if frame then
@@ -542,6 +635,13 @@ local function close_picker(player, data)
   end
   if data then
     data.picker = nil
+    local window = data.elems and data.elems.window
+    local opened = player.opened_gui_type
+    -- Nur zurückgeben, wenn nichts anderes geöffnet ist (bzw. nur die alte Auswahl)
+    if data.open and window and window.valid
+      and (opened == defines.gui_type.none or (opened == defines.gui_type.custom and player.opened ~= window)) then
+      player.opened = window
+    end
   end
 end
 
@@ -639,6 +739,10 @@ local function open_picker(player, data)
   fill_picker_items(player.index, pick)
   refresh_picker(pick)
   frame.bring_to_front()
+  -- Das Fenster darunter wird dabei "geschlossen" gemeldet - das ist hier keins
+  data.switching = true
+  player.opened = frame
+  data.switching = false
 end
 
 -- Klick auf ein Item übernimmt es mit der gewählten Qualität
@@ -660,14 +764,14 @@ end
 
 function gui.open(player)
   local data = gamble.get(player.index)
-  local old = player.gui.relative[PANEL]
+  local old = player.gui.screen[WINDOW]
   if old then
     old.destroy()
   end
-  build_panel(player, data)
+  build_window(player, data)
   data.open = true
-  player.opened = defines.gui_type.controller
   gui.refresh(player)
+  player.opened = data.elems.window
 end
 
 -- Einsatz und Gewinn zurück ins Inventar, Rest auf den Boden. Läuft gerade ein
@@ -685,23 +789,18 @@ local function cleanup(player)
     data.last = nil
   end
   close_picker(player, data)
-  local panel = player.gui.relative[PANEL]
-  if panel then
-    panel.destroy()
+  local window = player.gui.screen[WINDOW]
+  if window then
+    window.destroy()
   end
 end
 
 function gui.close(player)
-  local data = storage.players[player.index]
-  if data and data.open and player.opened_gui_type == defines.gui_type.controller then
-    player.opened = nil
-  end
   cleanup(player)
 end
 
 function gui.toggle(player)
-  local data = storage.players[player.index]
-  if data and data.open then
+  if player.gui.screen[WINDOW] then
     gui.close(player)
   else
     gui.open(player)
@@ -722,7 +821,12 @@ local function on_click(event)
   local tags = element.tags
   local pick = data.picker
 
-  if name == NAMES.stake then
+  if tags[TAGS.inventory] then
+    gamble.click_inventory(player, data, tags[TAGS.inventory], event)
+    gui.refresh(player)
+  elseif name == NAMES.close then
+    gui.close(player)
+  elseif name == NAMES.stake then
     gamble.click_slot(player, data.stake_inventory[1], event, true)
     gui.refresh(player)
   elseif name == NAMES.output then
@@ -831,12 +935,25 @@ local function on_confirmed(event)
   end
 end
 
+-- E oder Esc: Factorio fragt das geöffnete Fenster zu schließen
 local function on_closed(event)
-  if event.gui_type == defines.gui_type.controller then
-    local data = storage.players[event.player_index]
-    if data and data.open then
-      cleanup(game.get_player(event.player_index))
-    end
+  local element = event.element
+  if not (element and element.valid) then
+    return
+  end
+  local player = game.get_player(event.player_index)
+  local data = storage.players[event.player_index]
+  if element.name == PICKER then
+    close_picker(player, data)
+  elseif element.name == WINDOW and not (data and data.switching) then
+    gui.close(player)
+  end
+end
+
+local function on_location_changed(event)
+  local element = event.element
+  if element and element.valid and element.name == WINDOW then
+    gamble.get(event.player_index).window_location = element.location
   end
 end
 
@@ -856,7 +973,7 @@ function gui.tick()
       local spin = data.spin
       spin.frame = spin.frame + 1
       local elems = data.elems
-      local panel_open = elems ~= nil and elems.panel.valid
+      local panel_open = elems ~= nil and elems.window.valid
       if spin.frame >= spin.reel.duration then
         local result = gamble.finish(player, data)
         if result.won then
@@ -894,7 +1011,8 @@ end
 -- Nach einem Mod-Update: Panels neu aufbauen, die alten Elemente sind vergessen
 function gui.reopen_all()
   for _, player in pairs(game.players) do
-    local panel = player.gui.relative[PANEL]
+    -- Angehängtes Panel aus 0.6.0 bis 0.10.0
+    local panel = player.gui.relative["item_gamble_panel"]
     if panel then
       panel.destroy()
     end
@@ -902,10 +1020,9 @@ function gui.reopen_all()
     if picker then
       picker.destroy()
     end
-    -- Fenster aus 0.3.0 bis 0.5.0
-    local old_window = player.gui.screen["item_gamble_window"]
-    if old_window then
-      old_window.destroy()
+    local window = player.gui.screen[WINDOW]
+    if window then
+      window.destroy()
     end
     local data = storage.players[player.index]
     if data and data.open then
@@ -918,6 +1035,7 @@ function gui.register_events()
   script.on_event(defines.events.on_tick, gui.tick)
   script.on_event(defines.events.on_gui_click, on_click)
   script.on_event(defines.events.on_gui_closed, on_closed)
+  script.on_event(defines.events.on_gui_location_changed, on_location_changed)
   script.on_event(defines.events.on_gui_text_changed, on_text_changed)
   script.on_event(defines.events.on_gui_value_changed, on_value_changed)
   script.on_event(defines.events.on_gui_confirmed, on_confirmed)

@@ -175,3 +175,12 @@ User-Feedback zu 0.9.0: Qualität vom Ziel nicht einstellbar; unförmiger Kasten
 - Zielauswahl: alle nicht versteckten Qualitäten, Klick auf Item übernimmt sofort, keine Mengenzeile mehr
 - Gewinn-Slot sperrt nur bei anderem Item oder vollem Stack; Überlauf beim Gewinn → Inventar, dann Boden
 - Walze: Gewinnfelder `plan.wins`, Abstand = Takt ±1 (mind. 2). Alte Pläne (period/phase) bleiben lesbar
+
+### 0.11.0: Eigenes Fenster
+
+User zu 0.10.0: Spielfigur-Fenster + Panel „viel zu breit, das muss sein eigenes Fenster werden … streng dich an“.
+
+- Eigenes Fenster (`screen`, `player.opened`), ~900 px wie ein Kistenfenster: links Inventar-Raster (`slot_button_deep_frame` + `slot_table`, `inventory_slot`), rechts Glücksrad, unten Drehen. Position wird gemerkt (`data.window_location`)
+- Inventar-Raster bewegt echte Items (`gamble.click_inventory`): links aufnehmen + `player.hand_location` setzen (Hand-Symbol `utility/hand`, Q legt zurück), ablegen, tauschen; rechts halb/eins; Shift → Einsatz (Shift+Rechts halb); Strg → alle Items dieser Sorte in den Einsatz. Anders als 0.4.0 (dort nur Auswahl/Reservierung)
+- Zielauswahl ist beim Öffnen `player.opened` (Esc schließt erst sie), danach zurück ans Fenster (`data.switching` gegen das falsche on_gui_closed)
+- Zugangswege, die verworfen wurden: Script-Inventar (zeichnet immer einen Inventarkasten), Spielfigur-Fenster (zu breit), versteckte Entität (Entity-GUIs schließen außer Reichweite, nicht getestet)

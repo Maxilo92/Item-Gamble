@@ -1,4 +1,16 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.11.0
+Date: 2026-10-07
+  Changes:
+    - The gamble is its own window again, about as wide as a chest window: your inventory on the
+      left, the wheel of fortune on the right, spin button at the bottom. E and Esc close it, and
+      it remembers where you dragged it.
+    - The inventory in the window moves your real items with the usual controls: left click picks
+      up (the slot is marked with the hand, Q puts it back), places or swaps, right click takes
+      half or places one item. Shift click moves a stack into the stake slot (shift + right click
+      half of it), Ctrl + click collects all items of that kind into the stake slot.
+    - Esc closes the target selection first, like vanilla popups, before the window itself.
+---------------------------------------------------------------------------------------------------
 Version: 0.10.0
 Date: 2026-10-07
   Changes:
