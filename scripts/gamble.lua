@@ -1,10 +1,10 @@
 -- Spiellogik ohne GUI: Einsatz, Chance, Dreh, Auszahlung.
 --
--- Geöffnet wird ein leeres Inventar ohne Slots: Factorio zeigt dann nur das eigene
--- Inventar, wie die linke Hälfte eines Kistenfensters. Einsatz und Gewinn liegen in
--- je einem 1-Slot-Inventar (game.create_inventory) und werden im Glücksspiel-Panel
--- als Slots angezeigt, die sich wie Vanilla-Slots bedienen lassen. Ein Slot heißt
--- automatisch: höchstens ein Stack. Gewinne landen im Gewinn-Slot.
+-- Einsatz und Gewinn liegen in je einem 1-Slot-Inventar (game.create_inventory) und
+-- werden im Glücksrad-Panel als Slots angezeigt, die sich wie Vanilla-Slots bedienen
+-- lassen. Ein Slot heißt automatisch: höchstens ein Stack.
+-- Der Einsatz-Slot ist ein Vorrat: pro Dreh wird nur die eingestellte Menge eingesetzt,
+-- so kann man nach einer Niete sofort weiterdrehen. Gewinne landen im Gewinn-Slot.
 
 local values = require("scripts.values")
 local reel = require("scripts.reel")
@@ -43,8 +43,12 @@ local function migrate(player_index, data)
     old.destroy()
   end
   data.stake = nil
-  data.stake_count = nil
   data.location = nil
+  -- 0.9.0 öffnete ein leeres Inventar als Fenster
+  if data.window_inventory and data.window_inventory.valid then
+    data.window_inventory.destroy()
+  end
+  data.window_inventory = nil
 end
 
 function gamble.init()
@@ -65,11 +69,8 @@ end
 function gamble.get(player_index)
   local data = storage.players[player_index]
   if not data then
-    data = { count = 1 }
+    data = { count = 1, stake_count = 1 }
     storage.players[player_index] = data
-  end
-  if not (data.window_inventory and data.window_inventory.valid) then
-    data.window_inventory = game.create_inventory(0, { "item-gamble.window-title" })
   end
   if not (data.stake_inventory and data.stake_inventory.valid) then
     data.stake_inventory = game.create_inventory(1)
@@ -106,6 +107,19 @@ end
 
 local function same_item(a, b)
   return a.name == b.name and a.quality.name == b.quality.name
+end
+
+-- Liegt eine andere Sorte im Einsatz-Slot als beim letzten Mal, wird die Einsatzmenge
+-- auf den ganzen Vorrat gesetzt - wie beim Einlegen eines Stacks erwartet.
+function gamble.track_stake(data)
+  local slot = data.stake_inventory[1]
+  local key = slot.valid_for_read and (slot.name .. "/" .. slot.quality.name) or nil
+  if key ~= data.stake_key then
+    data.stake_key = key
+    if key then
+      data.stake_count = slot.count
+    end
+  end
 end
 
 -- Klick auf einen Slot im Panel, wie bei Vanilla-Slots:
@@ -155,15 +169,16 @@ function gamble.click_slot(player, slot, event, accepts_input)
   end
 end
 
--- Passt ein möglicher Gewinn noch in den Gewinn-Slot? Sonst steht der Automat, wie
--- eine Maschine mit voller Ausgabe.
-local function output_fits(data, target, count)
+-- Kann der Gewinn-Slot einen Gewinn annehmen? Gesperrt ist er nur, wenn ein anderes
+-- Item darin liegt oder der Stack voll ist - wie eine Maschine mit voller Ausgabe.
+-- Was beim Gewinn nicht mehr hineinpasst, geht ins Inventar.
+local function output_accepts(data, target)
   local slot = data.output_inventory[1]
   if not slot.valid_for_read then
     return true
   end
   return slot.name == target.name and slot.quality.name == target.quality
-    and slot.count + count <= slot.prototype.stack_size
+    and slot.count < slot.prototype.stack_size
 end
 
 -- Alles, was das Fenster anzeigt und der Dreh braucht.
@@ -175,14 +190,17 @@ function gamble.evaluate(data)
 
   local slot = data.stake_inventory[1]
   if slot.valid_for_read then
+    -- Pro Dreh eingesetzt wird die eingestellte Menge, höchstens der ganze Vorrat
+    local count = math.max(1, math.min(math.floor(data.stake_count or 1), slot.count))
     state.stake = {
       name = slot.name,
       quality = slot.quality.name,
-      count = slot.count,
+      count = count,
+      available = slot.count,
       spoil = slot.spoil_percent,
     }
     if values.is_selectable(slot.name) and not has_equipment(slot) then
-      state.stake_value = values.stack(slot.name, slot.quality.name, slot.count, slot.spoil_percent)
+      state.stake_value = values.stack(slot.name, slot.quality.name, count, slot.spoil_percent)
     end
   end
 
@@ -206,7 +224,7 @@ function gamble.evaluate(data)
     state.problem = "no-target"
   elseif not state.target_value then
     state.problem = "target-no-value"
-  elseif not output_fits(data, target, state.count) then
+  elseif not output_accepts(data, target) then
     state.problem = "output-blocked"
   else
     local chance, ratio, reason = values.chance(state.stake_value, state.target_value)
@@ -225,7 +243,12 @@ function gamble.spin(player, data)
     return state
   end
 
-  data.stake_inventory[1].clear()
+  local slot = data.stake_inventory[1]
+  if state.stake.count >= slot.count then
+    slot.clear()
+  else
+    slot.count = slot.count - state.stake.count
+  end
   local won = storage.rng() < state.chance
   data.last = nil
   data.spin = {
@@ -267,7 +290,7 @@ end
 function gamble.remove_player(player_index)
   local data = storage.players[player_index]
   if data then
-    for _, key in pairs({ "window_inventory", "stake_inventory", "output_inventory" }) do
+    for _, key in pairs({ "stake_inventory", "output_inventory" }) do
       if data[key] and data[key].valid then
         data[key].destroy()
       end

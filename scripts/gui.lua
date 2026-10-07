@@ -1,12 +1,12 @@
--- Fenster wie bei einer Kiste: Geöffnet wird ein leeres Inventar ohne Slots, Factorio
--- zeigt dann das eigene Inventar mit der gewohnten Bedienung. Rechts daran hängt das
--- Glücksspiel-Panel (relative GUI) mit Einsatz-, Ziel- und Gewinn-Slot, Chance,
--- Walze und Drehen. Einsatz und Gewinn bedient man wie Vanilla-Slots.
--- Das Ziel wählt man über einen Slot wie beim Konstanten Kombinator: Klick öffnet
--- einen Auswahldialog nach dem Vorbild von „Signal auswählen“ (dieselben Vanilla-
--- Styles: Gruppen-Tabs, Slot-Raster, Qualität, Slider, Mengenfeld, grüner Haken,
--- Suche über übersetzte Namen). Den Original-Dialog können Mods nicht öffnen, er
--- gehört zu Kombinator- und Anforderungsslots von Gebäuden.
+-- Fenster wie bei einem Gebäude: Geöffnet wird das normale Spielfigur-Fenster (wie mit
+-- E), rechts daran hängt das Glücksrad-Panel (relative GUI). Ein eigenes Inventar-
+-- Fenster ginge nicht ohne einen leeren Inventarkasten daneben.
+--
+-- Im Panel: Einsatz-Slot (Vorrat) mit Menge pro Dreh, Ziel-Slot mit Menge, Gewinn-
+-- Slot, Chance, Walze, Drehen. Einsatz und Gewinn bedient man wie Vanilla-Slots.
+-- Das Ziel wählt man in einem Dialog nach dem Vorbild von „Signal auswählen“
+-- (dieselben Vanilla-Styles, Suche über übersetzte Namen). Den Original-Dialog
+-- können Mods nicht öffnen, er gehört zu Kombinator- und Anforderungsslots.
 --
 -- Die Walze ist ein Scroll-Bereich ohne Scrollbalken, der überstehende Felder
 -- abschneidet. Darin liegt eine Reihe Slots; das erste bekommt einen negativen
@@ -26,15 +26,16 @@ local PICKER_COLUMNS = 11   -- 6 Gruppen-Tabs à 75 px sind so breit wie 11 Slot
 local PICKER_ROWS = 10
 local NAMES = {
   stake = "item_gamble_stake",
-  output = "item_gamble_output",
+  stake_slider = "item_gamble_stake_slider",
+  stake_amount = "item_gamble_stake_amount",
   target = "item_gamble_target",
+  target_slider = "item_gamble_target_slider",
+  target_amount = "item_gamble_target_amount",
+  output = "item_gamble_output",
   spin = "item_gamble_spin",
   picker_close = "item_gamble_picker_close",
   picker_search_button = "item_gamble_picker_search_button",
   picker_search = "item_gamble_picker_search",
-  picker_slider = "item_gamble_picker_slider",
-  picker_count = "item_gamble_picker_count",
-  picker_confirm = "item_gamble_picker_confirm",
 }
 local TAGS = {
   group = "item_gamble_group",
@@ -101,7 +102,7 @@ local function build_panel(player, data)
     direction = "vertical",
     caption = { "item-gamble.panel-title" },
     anchor = {
-      gui = defines.relative_gui_type.script_inventory_gui,
+      gui = defines.relative_gui_type.controller_gui,
       position = defines.relative_gui_position.right,
     },
   })
@@ -112,20 +113,53 @@ local function build_panel(player, data)
     direction = "vertical",
   })
 
-  local slots = content.add({ type = "table", column_count = 3 })
+  -- Bezeichnung | Slot | Menge (Slider + Zahl) | Wert
+  local slots = content.add({ type = "table", column_count = 4 })
   slots.style.horizontal_spacing = 12
   slots.style.vertical_spacing = 4
   slots.style.vertical_align = "center"
 
-  local function slot_row(caption, name, style, tooltip)
-    slots.add({ type = "label", style = "caption_label", caption = caption })
-    local button = slots.add({ type = "sprite-button", name = name, style = style, tooltip = tooltip })
-    local info = slots.add({ type = "label" })
-    return button, info
+  local function amount(slider_name, field_name, tooltip)
+    local row = slots.add({ type = "flow", direction = "horizontal" })
+    row.style.vertical_align = "center"
+    row.style.horizontal_spacing = 8
+    local slider = row.add({
+      type = "slider",
+      name = slider_name,
+      minimum_value = 0,
+      maximum_value = 1,
+      value = 0,
+      value_step = 1,
+      tooltip = tooltip,
+    })
+    slider.style.width = 120
+    local field = row.add({
+      type = "textfield",
+      name = field_name,
+      style = "slider_value_textfield",
+      numeric = true,
+      allow_decimal = false,
+      allow_negative = false,
+      lose_focus_on_confirm = true,
+      tooltip = tooltip,
+    })
+    return slider, field
   end
-  local stake, stake_value = slot_row({ "item-gamble.stake" }, NAMES.stake, "inventory_slot", { "item-gamble.stake-tooltip" })
-  local target, target_value = slot_row({ "item-gamble.target" }, NAMES.target, "slot_button", { "item-gamble.target-tooltip" })
-  local output, output_info = slot_row({ "item-gamble.output" }, NAMES.output, "inventory_slot", { "item-gamble.output-tooltip" })
+
+  slots.add({ type = "label", style = "caption_label", caption = { "item-gamble.stake" } })
+  local stake = slots.add({ type = "sprite-button", name = NAMES.stake, style = "inventory_slot", tooltip = { "item-gamble.stake-tooltip" } })
+  local stake_slider, stake_amount = amount(NAMES.stake_slider, NAMES.stake_amount, { "item-gamble.stake-amount-tooltip" })
+  local stake_value = slots.add({ type = "label" })
+
+  slots.add({ type = "label", style = "caption_label", caption = { "item-gamble.target" } })
+  local target = slots.add({ type = "sprite-button", name = NAMES.target, style = "slot_button", tooltip = { "item-gamble.target-tooltip" } })
+  local target_slider, target_amount = amount(NAMES.target_slider, NAMES.target_amount, { "item-gamble.count-tooltip" })
+  local target_value = slots.add({ type = "label" })
+
+  slots.add({ type = "label", style = "caption_label", caption = { "item-gamble.output" } })
+  local output = slots.add({ type = "sprite-button", name = NAMES.output, style = "inventory_slot", tooltip = { "item-gamble.output-tooltip" } })
+  slots.add({ type = "empty-widget" })
+  slots.add({ type = "empty-widget" })
 
   content.add({ type = "line" })
 
@@ -179,11 +213,14 @@ local function build_panel(player, data)
   data.elems = {
     panel = panel,
     stake = stake,
-    output = output,
-    output_info = output_info,
+    stake_slider = stake_slider,
+    stake_amount = stake_amount,
     stake_value = stake_value,
     target = target,
+    target_slider = target_slider,
+    target_amount = target_amount,
     target_value = target_value,
+    output = output,
     chance = chance,
     reel_slots = reel_slots,
     message = message,
@@ -266,21 +303,51 @@ local function show_stack(button, stack)
   end
 end
 
-function gui.refresh(player)
+-- Slider und Zahl einer Mengenwahl. max nil = nichts zu wählen.
+local function show_amount(slider, field, value, max, enabled, typing)
+  if max and max > 1 then
+    slider.set_slider_minimum_maximum(1, max)
+    slider.slider_value = value
+    slider.enabled = enabled
+  else
+    -- Minimum und Maximum dürfen nicht gleich sein
+    slider.set_slider_minimum_maximum(0, 1)
+    slider.slider_value = max and 1 or 0
+    slider.enabled = false
+  end
+  field.enabled = enabled and max ~= nil
+  if not typing then
+    field.text = max and tostring(value) or ""
+  end
+end
+
+-- typing: Name des Feldes, in dem gerade getippt wird (wird nicht überschrieben)
+function gui.refresh(player, typing)
   local data = storage.players[player.index]
   local elems = data and data.elems
   if not (elems and elems.panel.valid) then
     return
   end
+  gamble.track_stake(data)
   show_stack(elems.stake, data.stake_inventory[1])
   show_stack(elems.output, data.output_inventory[1])
   local state = gamble.evaluate(data)
   local spinning = data.spin ~= nil
+  -- Gespeicherte Mengen auf den gültigen Bereich ziehen, außer während des Tippens
+  if state.stake and typing ~= NAMES.stake_amount then
+    data.stake_count = state.stake.count
+  end
+  if state.count and typing ~= NAMES.target_amount then
+    data.count = state.count
+  end
 
+  local stake = state.stake
+  show_amount(elems.stake_slider, elems.stake_amount, stake and stake.count, stake and stake.available,
+    not spinning, typing == NAMES.stake_amount)
   if state.stake_value then
-    if state.stake.spoil > 0 then
+    if stake.spoil > 0 then
       elems.stake_value.caption = { "item-gamble.value-fresh", format_number(state.stake_value),
-        string.format("%.0f", (1 - state.stake.spoil) * 100) }
+        string.format("%.0f", (1 - stake.spoil) * 100) }
     else
       elems.stake_value.caption = { "item-gamble.value", format_number(state.stake_value) }
     end
@@ -301,6 +368,8 @@ function gui.refresh(player)
     target.elem_tooltip = nil
   end
   target.enabled = not spinning
+  show_amount(elems.target_slider, elems.target_amount, state.count, state.max_count,
+    not spinning, typing == NAMES.target_amount)
   elems.target_value.caption = state.target_value and { "item-gamble.value", format_number(state.target_value) } or ""
 
   if spinning then
@@ -377,11 +446,11 @@ local function selectable_groups()
   return groups
 end
 
--- Qualitäten wie im Spiel: nur die, die die eigene Fraktion schon erforscht hat
-local function unlocked_qualities(player)
+-- Alle Qualitäten wie in „Signal auswählen“, auch noch nicht erforschte
+local function all_qualities()
   local list = {}
   for name, quality in pairs(prototypes.quality) do
-    if not quality.hidden and player.force.is_quality_unlocked(name) then
+    if not quality.hidden then
       list[#list + 1] = { name = name, level = quality.level, order = quality.order }
     end
   end
@@ -454,7 +523,7 @@ local function fill_picker_items(player_index, pick)
   end
 end
 
--- Qualität, Slider und Menge an die Auswahl anpassen
+-- Qualitätsknöpfe und Qualitätsanzeige der Items an die Auswahl anpassen
 local function refresh_picker(pick)
   local elems = pick.elems
   for name, button in pairs(elems.quality_buttons) do
@@ -464,23 +533,6 @@ local function refresh_picker(pick)
     button.quality = pick.quality
     button.elem_tooltip = { type = "item-with-quality", name = name, quality = pick.quality }
   end
-
-  local stack_size = pick.item and prototypes.item[pick.item].stack_size or 1
-  pick.count = math.max(1, math.min(pick.count, stack_size))
-  local slider = elems.slider
-  if stack_size > 1 then
-    slider.set_slider_minimum_maximum(1, stack_size)
-    slider.enabled = pick.item ~= nil
-  else
-    -- Minimum und Maximum dürfen nicht gleich sein
-    slider.set_slider_minimum_maximum(0, 1)
-    slider.enabled = false
-  end
-  slider.slider_value = pick.count
-  if not pick.typing then
-    elems.count.text = tostring(pick.count)
-  end
-  elems.confirm.enabled = pick.item ~= nil
 end
 
 local function close_picker(player, data)
@@ -502,7 +554,6 @@ local function open_picker(player, data)
     group = current and prototypes.item[current.name].group.name or (groups[1] and groups[1].name),
     item = current and current.name,
     quality = current and current.quality or "normal",
-    count = data.count or 1,
     search = "",
   }
   data.picker = pick
@@ -562,7 +613,7 @@ local function open_picker(player, data)
   quality_row.style.top_margin = 8
   quality_row.style.horizontal_spacing = 0
   local quality_buttons = {}
-  for _, quality in ipairs(unlocked_qualities(player)) do
+  for _, quality in ipairs(all_qualities()) do
     local button = quality_row.add({
       type = "sprite-button",
       style = "slot_button",
@@ -574,40 +625,6 @@ local function open_picker(player, data)
     quality_buttons[quality.name] = button
   end
 
-  local count_frame = frame.add({ type = "frame", style = "inside_shallow_frame_with_padding" })
-  count_frame.style.top_margin = 8
-  -- Abstände gibt es nur bei Flows und Tabellen, nicht bei Rahmen
-  local count_row = count_frame.add({ type = "flow", direction = "horizontal" })
-  count_row.style.vertical_align = "center"
-  count_row.style.horizontal_spacing = 8
-  count_row.style.horizontally_stretchable = true
-  local slider = count_row.add({
-    type = "slider",
-    name = NAMES.picker_slider,
-    minimum_value = 0,
-    maximum_value = 1,
-    value = 1,
-    value_step = 1,
-  })
-  slider.style.horizontally_stretchable = true
-  local count = count_row.add({
-    type = "textfield",
-    name = NAMES.picker_count,
-    style = "slider_value_textfield",
-    numeric = true,
-    allow_decimal = false,
-    allow_negative = false,
-    lose_focus_on_confirm = true,
-    tooltip = { "item-gamble.count-tooltip" },
-  })
-  local confirm = count_row.add({
-    type = "sprite-button",
-    name = NAMES.picker_confirm,
-    style = "item_and_count_select_confirm",
-    sprite = "utility/check_mark_white",
-    tooltip = { "item-gamble.picker-confirm" },
-  })
-
   pick.elems = {
     frame = frame,
     search = search,
@@ -615,11 +632,7 @@ local function open_picker(player, data)
     group_buttons = group_buttons,
     item_buttons = {},
     quality_buttons = quality_buttons,
-    slider = slider,
-    count = count,
-    confirm = confirm,
   }
-  -- Ist die bisher gewählte Qualität nicht (mehr) erforscht, auf normal zurück
   if not quality_buttons[pick.quality] then
     pick.quality = "normal"
   end
@@ -628,13 +641,12 @@ local function open_picker(player, data)
   frame.bring_to_front()
 end
 
-local function confirm_picker(player, data)
+-- Klick auf ein Item übernimmt es mit der gewählten Qualität
+local function choose_target(player, data, name)
   local pick = data.picker
-  if not (pick and pick.item) then
-    return
-  end
-  data.target = { name = pick.item, quality = pick.quality }
-  data.count = pick.count
+  data.target = { name = name, quality = pick.quality }
+  local stack_size = prototypes.item[name].stack_size
+  data.count = math.max(1, math.min(data.count or 1, stack_size))
   data.last = nil
   close_picker(player, data)
   gui.refresh(player)
@@ -654,7 +666,7 @@ function gui.open(player)
   end
   build_panel(player, data)
   data.open = true
-  player.opened = data.window_inventory
+  player.opened = defines.gui_type.controller
   gui.refresh(player)
 end
 
@@ -681,7 +693,7 @@ end
 
 function gui.close(player)
   local data = storage.players[player.index]
-  if data and data.open and player.opened_gui_type == defines.gui_type.script_inventory then
+  if data and data.open and player.opened_gui_type == defines.gui_type.controller then
     player.opened = nil
   end
   cleanup(player)
@@ -743,8 +755,6 @@ local function on_click(event)
     return
   elseif name == NAMES.picker_close then
     close_picker(player, data)
-  elseif name == NAMES.picker_confirm then
-    confirm_picker(player, data)
   elseif name == NAMES.picker_search_button then
     local search = pick.elems.search
     search.visible = not search.visible
@@ -761,72 +771,68 @@ local function on_click(event)
     fill_picker_items(player.index, pick)
     refresh_picker(pick)
   elseif tags[TAGS.item] then
-    local old = pick.item and pick.elems.item_buttons[pick.item]
-    if old and old.valid then
-      old.style = "slot_button"
-    end
-    -- Doppelklick übernimmt gleich
-    local double = pick.item == tags[TAGS.item] and event.tick - (pick.click_tick or -100) <= 20
-    pick.item = tags[TAGS.item]
-    pick.click_tick = event.tick
-    element.style = "yellow_slot_button"
-    refresh_picker(pick)
-    if double then
-      confirm_picker(player, data)
-    end
+    choose_target(player, data, tags[TAGS.item])
   elseif tags[TAGS.quality] then
     pick.quality = tags[TAGS.quality]
     refresh_picker(pick)
   end
 end
 
+-- Mengenfelder und Suche
 local function on_text_changed(event)
   local element = event.element
   if not (element and element.valid) then
     return
   end
+  local player = game.get_player(event.player_index)
   local data = storage.players[event.player_index]
-  local pick = data and data.picker
-  if not pick then
+  if not data then
     return
   end
-  if element.name == NAMES.picker_search then
-    pick.search = string.lower(element.text)
-    fill_picker_items(event.player_index, pick)
-    refresh_picker(pick)
-  elseif element.name == NAMES.picker_count then
-    pick.count = math.floor(tonumber(element.text) or 1)
-    -- Während des Tippens das Feld nicht überschreiben, nur den Slider nachziehen
-    pick.typing = true
-    refresh_picker(pick)
-    pick.typing = false
+  local name = element.name
+  if name == NAMES.stake_amount then
+    data.stake_count = math.max(1, math.floor(tonumber(element.text) or 1))
+    gui.refresh(player, name)
+  elseif name == NAMES.target_amount then
+    data.count = math.max(1, math.floor(tonumber(element.text) or 1))
+    gui.refresh(player, name)
+  elseif name == NAMES.picker_search and data.picker then
+    data.picker.search = string.lower(element.text)
+    fill_picker_items(event.player_index, data.picker)
+    refresh_picker(data.picker)
   end
 end
 
 local function on_value_changed(event)
   local element = event.element
-  if not (element and element.valid and element.name == NAMES.picker_slider) then
+  if not (element and element.valid) then
     return
   end
   local data = storage.players[event.player_index]
-  local pick = data and data.picker
-  if pick then
-    pick.count = math.floor(element.slider_value + 0.5)
-    refresh_picker(pick)
+  if not data then
+    return
   end
+  local value = math.max(1, math.floor(element.slider_value + 0.5))
+  if element.name == NAMES.stake_slider then
+    data.stake_count = value
+  elseif element.name == NAMES.target_slider then
+    data.count = value
+  else
+    return
+  end
+  gui.refresh(game.get_player(event.player_index))
 end
 
--- Enter im Mengenfeld übernimmt die Auswahl
+-- Enter oder Fokusverlust: Mengenfeld auf den gültigen Bereich setzen
 local function on_confirmed(event)
   local element = event.element
-  if element and element.valid and element.name == NAMES.picker_count then
-    local player = game.get_player(event.player_index)
-    confirm_picker(player, gamble.get(player.index))
+  if element and element.valid and (element.name == NAMES.stake_amount or element.name == NAMES.target_amount) then
+    gui.refresh(game.get_player(event.player_index))
   end
 end
 
 local function on_closed(event)
-  if event.gui_type == defines.gui_type.script_inventory then
+  if event.gui_type == defines.gui_type.controller then
     local data = storage.players[event.player_index]
     if data and data.open then
       cleanup(game.get_player(event.player_index))
@@ -877,7 +883,7 @@ function gui.tick()
   end
 end
 
--- Einsatz ändert sich durch Vanilla-Bedienung: Inventar oder Hand ändern sich mit
+-- Hand oder Inventar ändern sich, wenn Items in Slots wandern
 local function on_inventory_event(event)
   local data = storage.players[event.player_index]
   if data and data.open then

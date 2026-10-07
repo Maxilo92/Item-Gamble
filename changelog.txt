@@ -1,4 +1,18 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.10.0
+Date: 2026-10-07
+  Changes:
+    - ALT + G opens the normal character window with the wheel of fortune attached to the right,
+      like a building. The odd empty box next to the inventory is gone.
+    - The stake slot is a supply now: a slider and amount field next to it set how much is staked
+      per spin, the rest stays for the next spins. After a miss you can spin again right away.
+    - The target amount moved out of the selection dialog: slider and amount field sit next to the
+      target slot. Clicking an item in the dialog takes it immediately.
+    - All qualities can be chosen as target, like in "Select signal", not only researched ones.
+    - The prize slot only blocks the reel when it holds a different item or its stack is full.
+      Whatever does not fit goes to the inventory.
+    - Win fields on the reel are spaced irregularly, but evenly overall.
+---------------------------------------------------------------------------------------------------
 Version: 0.9.0
 Date: 2026-10-07
   Features:

@@ -1,7 +1,7 @@
 -- Walze: eine Reihe Felder rauscht seitlich durch, bremst ab, bleibt irgendwo im
 -- Feld stehen und rastet dann in die Mitte des nächsten Feldes ein. Unter dem Pfeil
 -- steht am Ende genau das Ergebnisfeld. Gewinnfelder zeigen das Zielitem und kommen
--- in festem Takt (z.B. jedes dritte Feld), dazwischen leere Nieten.
+-- regelmäßig, aber nicht starr: der Abstand schwankt um eins um einen Grundtakt.
 --
 -- Spannung kommt aus Tempo und Timing, nicht aus Effekten:
 --   kurz    schneller, klarer Dreh - fast immer eine Niete
@@ -54,7 +54,25 @@ local function period_for(chance)
 end
 
 function reel.is_win(plan, index)
+  if plan.wins then
+    return plan.wins[index] == true
+  end
+  -- Pläne aus 0.6.0 bis 0.9.0 (gespeichert mitten im Dreh oder als letzter Dreh)
   return index % plan.period == plan.phase
+end
+
+-- So weit hinaus werden Gewinnfelder gelegt; deckt den längsten Weg plus Sichtfeld
+local LAST_INDEX = 140
+
+-- Gewinnfelder: Grundtakt, jeder Abstand schwankt um eins, nie direkt nebeneinander
+local function place_wins(rng, period)
+  local wins = {}
+  local index = rng(0, period - 1)
+  while index <= LAST_INDEX do
+    wins[index] = true
+    index = index + math.max(2, period + rng(-1, 1))
+  end
+  return wins
 end
 
 local function between(rng, range)
@@ -78,7 +96,7 @@ end
 -- Plant einen Dreh. rng ist storage.rng, damit auch die Optik deterministisch ist.
 function reel.plan(rng, won, chance)
   local period = period_for(chance)
-  local plan = { period = period, phase = rng(0, period - 1) }
+  local plan = { period = period, wins = place_wins(rng, period) }
   local kind, tier_name = choose_kind(rng, won)
   local tier = TIERS[tier_name]
 

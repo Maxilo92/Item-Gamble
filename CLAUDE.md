@@ -165,3 +165,13 @@ User-Feedback zu 0.8.1: Near Misses zu forced; kein Ton in den ersten Sekunden; 
 - Gewinn-Slot: `finish` legt den Gewinn hinein; belegt mit anderem Item oder zu voll → `output-blocked`, Dreh gesperrt
 - Walze: 6 px Lücke (`reel.PITCH`), Takt 3–6, Beinahe-Treffer ~19 % der Drehs, Drift 0,25–0,45 statt immer an der Kante, Hängen nur ab 0,4 (≈6 %)
 - Klick-Sound: bei jedem Feldwechsel, höchstens jeden 2. Frame
+
+### 0.10.0: Spielfigur-Fenster, Vorrat, schneller weiterdrehen
+
+User-Feedback zu 0.9.0: Qualität vom Ziel nicht einstellbar; unförmiger Kasten zwischen Inventar und Panel („bei einem Assembler ist da auch kein extra Slot, also weg damit“); Abstände nicht gleich, nur regelmäßig; leichter respinnen; Gewinn-Slot soll nur bei vollem Stack blockieren; Einsatz braucht Mengenslider wie das Ziel, Ziel-Menge raus aus der Auswahl neben den Ziel-Slot.
+
+- Geöffnet wird `player.opened = defines.gui_type.controller` (Spielfigur-Fenster), Panel per `relative_gui_type.controller_gui` rechts daran. Ein Script-Inventar zeichnet immer einen Inventarkasten, auch mit 0 Slots
+- Einsatz-Slot = Vorrat, `data.stake_count` = Menge pro Dreh (neue Sorte → ganzer Stack, `gamble.track_stake`). Ziel-Menge `data.count` daneben, beide mit `slider` + `slider_value_textfield`
+- Zielauswahl: alle nicht versteckten Qualitäten, Klick auf Item übernimmt sofort, keine Mengenzeile mehr
+- Gewinn-Slot sperrt nur bei anderem Item oder vollem Stack; Überlauf beim Gewinn → Inventar, dann Boden
+- Walze: Gewinnfelder `plan.wins`, Abstand = Takt ±1 (mind. 2). Alte Pläne (period/phase) bleiben lesbar
