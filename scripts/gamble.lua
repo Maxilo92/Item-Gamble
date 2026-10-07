@@ -1,9 +1,10 @@
 -- Spiellogik ohne GUI: Einsatz, Chance, Dreh, Auszahlung.
 --
--- Der Einsatz liegt in einem 1-Slot-Inventar pro Spieler (game.create_inventory).
--- Das Fenster öffnet dieses Inventar wie eine Kiste: Factorio zeigt daneben das
--- eigene Inventar, Klicken, Rechtsklick, Shift-Klick usw. funktionieren wie überall.
--- Ein Slot heißt automatisch: höchstens ein Stack.
+-- Geöffnet wird ein leeres Inventar ohne Slots: Factorio zeigt dann nur das eigene
+-- Inventar, wie die linke Hälfte eines Kistenfensters. Einsatz und Gewinn liegen in
+-- je einem 1-Slot-Inventar (game.create_inventory) und werden im Glücksspiel-Panel
+-- als Slots angezeigt, die sich wie Vanilla-Slots bedienen lassen. Ein Slot heißt
+-- automatisch: höchstens ein Stack. Gewinne landen im Gewinn-Slot.
 
 local values = require("scripts.values")
 local reel = require("scripts.reel")
@@ -67,8 +68,14 @@ function gamble.get(player_index)
     data = { count = 1 }
     storage.players[player_index] = data
   end
+  if not (data.window_inventory and data.window_inventory.valid) then
+    data.window_inventory = game.create_inventory(0, { "item-gamble.window-title" })
+  end
   if not (data.stake_inventory and data.stake_inventory.valid) then
-    data.stake_inventory = game.create_inventory(1, { "item-gamble.stake-inventory-title" })
+    data.stake_inventory = game.create_inventory(1)
+  end
+  if not (data.output_inventory and data.output_inventory.valid) then
+    data.output_inventory = game.create_inventory(1)
   end
   return data
 end
@@ -86,19 +93,83 @@ local function has_equipment(stack)
   return item ~= nil and item.grid ~= nil and item.grid.count() > 0
 end
 
--- Einsatz zurück ins Inventar (beim Schließen)
-function gamble.return_stake(player, data)
-  local inventory = data.stake_inventory
-  local slot = inventory and inventory.valid and inventory[1]
-  if slot and slot.valid_for_read then
-    give(player, slot)
-    slot.clear()
+-- Einsatz und nicht abgeholter Gewinn zurück ins Inventar, Rest auf den Boden
+function gamble.return_items(player, data)
+  for _, inventory in pairs({ data.stake_inventory, data.output_inventory }) do
+    local slot = inventory and inventory.valid and inventory[1]
+    if slot and slot.valid_for_read then
+      give(player, slot)
+      slot.clear()
+    end
   end
+end
+
+local function same_item(a, b)
+  return a.name == b.name and a.quality.name == b.quality.name
+end
+
+-- Klick auf einen Slot im Panel, wie bei Vanilla-Slots:
+--   Links: ablegen, aufnehmen, tauschen    Rechts: ein Item ablegen / halben Stack nehmen
+--   Shift: ins Inventar
+-- accepts_input = false für den Gewinn-Slot: dort kann man nur herausnehmen.
+function gamble.click_slot(player, slot, event, accepts_input)
+  local cursor = player.cursor_stack
+  if not cursor then
+    return
+  end
+  local right = event.button == defines.mouse_button_type.right
+
+  if event.shift then
+    if slot.valid_for_read then
+      local inserted = player.get_main_inventory() and player.get_main_inventory().insert(slot) or 0
+      if inserted >= slot.count then
+        slot.clear()
+      elseif inserted > 0 then
+        slot.count = slot.count - inserted
+      end
+    end
+    return
+  end
+
+  if cursor.valid_for_read then
+    if not accepts_input then
+      -- Gleiches Item in der Hand: dazunehmen, wie bei einer Maschinenausgabe
+      if slot.valid_for_read and same_item(slot, cursor) then
+        cursor.transfer_stack(slot, right and math.ceil(slot.count / 2) or nil)
+      end
+    elseif right then
+      if not slot.valid_for_read or same_item(slot, cursor) then
+        slot.transfer_stack(cursor, 1)
+      end
+    elseif not slot.valid_for_read or same_item(slot, cursor) then
+      slot.transfer_stack(cursor)
+    else
+      slot.swap_stack(cursor)
+    end
+  elseif slot.valid_for_read then
+    if right then
+      cursor.transfer_stack(slot, math.ceil(slot.count / 2))
+    else
+      cursor.transfer_stack(slot)
+    end
+  end
+end
+
+-- Passt ein möglicher Gewinn noch in den Gewinn-Slot? Sonst steht der Automat, wie
+-- eine Maschine mit voller Ausgabe.
+local function output_fits(data, target, count)
+  local slot = data.output_inventory[1]
+  if not slot.valid_for_read then
+    return true
+  end
+  return slot.name == target.name and slot.quality.name == target.quality
+    and slot.count + count <= slot.prototype.stack_size
 end
 
 -- Alles, was das Fenster anzeigt und der Dreh braucht.
 -- problem: nil oder "no-stake", "stake-no-value", "stake-equipment", "no-target",
--- "target-no-value", "lower" (Ziel billiger als Einsatz) oder "below-min".
+-- "target-no-value", "output-blocked" (Gewinn-Slot belegt), "lower" (Ziel billiger
+-- als Einsatz) oder "below-min".
 function gamble.evaluate(data)
   local state = {}
 
@@ -135,6 +206,8 @@ function gamble.evaluate(data)
     state.problem = "no-target"
   elseif not state.target_value then
     state.problem = "target-no-value"
+  elseif not output_fits(data, target, state.count) then
+    state.problem = "output-blocked"
   else
     local chance, ratio, reason = values.chance(state.stake_value, state.target_value)
     state.chance, state.ratio, state.problem = chance, ratio, reason
@@ -179,7 +252,13 @@ function gamble.finish(player, data)
   data.spin = nil
   storage.spins[player.index] = nil
   if result.won then
-    result.spilled = give(player, { name = result.name, quality = result.quality, count = result.count })
+    local prize = { name = result.name, quality = result.quality, count = result.count }
+    local inserted = data.output_inventory.insert(prize)
+    -- Passt nur, wenn der Slot inzwischen belegt wurde (z.B. Abbruch beim Schließen)
+    if inserted < prize.count then
+      prize.count = prize.count - inserted
+      result.spilled = give(player, prize)
+    end
   end
   data.last = result
   return result
@@ -187,8 +266,12 @@ end
 
 function gamble.remove_player(player_index)
   local data = storage.players[player_index]
-  if data and data.stake_inventory and data.stake_inventory.valid then
-    data.stake_inventory.destroy()
+  if data then
+    for _, key in pairs({ "window_inventory", "stake_inventory", "output_inventory" }) do
+      if data[key] and data[key].valid then
+        data[key].destroy()
+      end
+    end
   end
   storage.players[player_index] = nil
   storage.spins[player_index] = nil

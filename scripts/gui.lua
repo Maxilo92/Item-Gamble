@@ -1,6 +1,7 @@
--- Fenster wie bei einer Kiste: Geöffnet wird das 1-Slot-Einsatzinventar, Factorio
--- zeigt daneben das eigene Inventar mit der gewohnten Bedienung. Rechts daran hängt
--- das Glücksspiel-Panel (relative GUI): Ziel, Chance, Walze, Drehen.
+-- Fenster wie bei einer Kiste: Geöffnet wird ein leeres Inventar ohne Slots, Factorio
+-- zeigt dann das eigene Inventar mit der gewohnten Bedienung. Rechts daran hängt das
+-- Glücksspiel-Panel (relative GUI) mit Einsatz-, Ziel- und Gewinn-Slot, Chance,
+-- Walze und Drehen. Einsatz und Gewinn bedient man wie Vanilla-Slots.
 -- Das Ziel wählt man über einen Slot wie beim Konstanten Kombinator: Klick öffnet
 -- einen Auswahldialog nach dem Vorbild von „Signal auswählen“ (dieselben Vanilla-
 -- Styles: Gruppen-Tabs, Slot-Raster, Qualität, Slider, Mengenfeld, grüner Haken,
@@ -24,6 +25,8 @@ local PICKER = "item_gamble_picker"
 local PICKER_COLUMNS = 11   -- 6 Gruppen-Tabs à 75 px sind so breit wie 11 Slots
 local PICKER_ROWS = 10
 local NAMES = {
+  stake = "item_gamble_stake",
+  output = "item_gamble_output",
   target = "item_gamble_target",
   spin = "item_gamble_spin",
   picker_close = "item_gamble_picker_close",
@@ -45,6 +48,7 @@ local PROBLEM_KEYS = {
   ["stake-no-value"] = "item-gamble.problem-stake-no-value",
   ["stake-equipment"] = "item-gamble.problem-stake-equipment",
   ["target-no-value"] = "item-gamble.problem-target-no-value",
+  ["output-blocked"] = "item-gamble.problem-output-blocked",
   ["lower"] = "item-gamble.problem-lower",
   ["below-min"] = "item-gamble.problem-below-min",
 }
@@ -85,7 +89,7 @@ local function set_label(label, caption, style)
   label.caption = caption
   label.style = style
   label.style.single_line = false
-  label.style.maximal_width = reel.VISIBLE * reel.SLOT
+  label.style.maximal_width = reel.VISIBLE * reel.PITCH
 end
 
 -- ── Panel ───────────────────────────────────────────────────────────────────
@@ -95,7 +99,7 @@ local function build_panel(player, data)
     type = "frame",
     name = PANEL,
     direction = "vertical",
-    caption = { "item-gamble.window-title" },
+    caption = { "item-gamble.panel-title" },
     anchor = {
       gui = defines.relative_gui_type.script_inventory_gui,
       position = defines.relative_gui_position.right,
@@ -108,22 +112,20 @@ local function build_panel(player, data)
     direction = "vertical",
   })
 
-  local stake_row = content.add({ type = "flow", direction = "horizontal" })
-  stake_row.style.vertical_align = "center"
-  stake_row.add({ type = "label", style = "caption_label", caption = { "item-gamble.stake" } })
-  local stake_value = stake_row.add({ type = "label" })
+  local slots = content.add({ type = "table", column_count = 3 })
+  slots.style.horizontal_spacing = 12
+  slots.style.vertical_spacing = 4
+  slots.style.vertical_align = "center"
 
-  local target_row = content.add({ type = "flow", direction = "horizontal" })
-  target_row.style.vertical_align = "center"
-  target_row.style.horizontal_spacing = 8
-  target_row.add({ type = "label", style = "caption_label", caption = { "item-gamble.target" } })
-  local target = target_row.add({
-    type = "sprite-button",
-    name = NAMES.target,
-    style = "slot_button",
-    tooltip = { "item-gamble.target-tooltip" },
-  })
-  local target_value = target_row.add({ type = "label" })
+  local function slot_row(caption, name, style, tooltip)
+    slots.add({ type = "label", style = "caption_label", caption = caption })
+    local button = slots.add({ type = "sprite-button", name = name, style = style, tooltip = tooltip })
+    local info = slots.add({ type = "label" })
+    return button, info
+  end
+  local stake, stake_value = slot_row({ "item-gamble.stake" }, NAMES.stake, "inventory_slot", { "item-gamble.stake-tooltip" })
+  local target, target_value = slot_row({ "item-gamble.target" }, NAMES.target, "slot_button", { "item-gamble.target-tooltip" })
+  local output, output_info = slot_row({ "item-gamble.output" }, NAMES.output, "inventory_slot", { "item-gamble.output-tooltip" })
 
   content.add({ type = "line" })
 
@@ -143,11 +145,11 @@ local function build_panel(player, data)
     horizontal_scroll_policy = "never",
     vertical_scroll_policy = "never",
   })
-  viewport.style.width = reel.VISIBLE * reel.SLOT
+  viewport.style.width = reel.VISIBLE * reel.PITCH
   viewport.style.height = reel.SLOT
   viewport.style.padding = 0
   local strip = viewport.add({ type = "flow", direction = "horizontal", ignored_by_interaction = true })
-  strip.style.horizontal_spacing = 0
+  strip.style.horizontal_spacing = reel.GAP
   strip.style.padding = 0
   local reel_slots = {}
   for i = 1, reel.VISIBLE + 1 do
@@ -176,6 +178,9 @@ local function build_panel(player, data)
 
   data.elems = {
     panel = panel,
+    stake = stake,
+    output = output,
+    output_info = output_info,
     stake_value = stake_value,
     target = target,
     target_value = target_value,
@@ -210,7 +215,8 @@ local function draw_reel(elems, plan, shown, position)
       button.style.size = reel.SLOT
     end
   end
-  slots[1].style.left_margin = -offset
+  -- Jede Zelle ist Feld + Lücke, das Feld sitzt mittig darin
+  slots[1].style.left_margin = math.floor(reel.GAP / 2) - offset
 end
 
 -- Außerhalb eines Drehs zeigt die Walze, wo der letzte Dreh stehen blieb
@@ -246,12 +252,28 @@ local function result_caption(last)
   return { "item-gamble.result-won", last.count, icon }, "bold_green_label"
 end
 
+local function show_stack(button, stack)
+  if stack.valid_for_read then
+    button.sprite = "item/" .. stack.name
+    button.quality = stack.quality.name
+    button.number = stack.count
+    button.elem_tooltip = { type = "item-with-quality", name = stack.name, quality = stack.quality.name }
+  else
+    button.sprite = ""
+    button.quality = nil
+    button.number = nil
+    button.elem_tooltip = nil
+  end
+end
+
 function gui.refresh(player)
   local data = storage.players[player.index]
   local elems = data and data.elems
   if not (elems and elems.panel.valid) then
     return
   end
+  show_stack(elems.stake, data.stake_inventory[1])
+  show_stack(elems.output, data.output_inventory[1])
   local state = gamble.evaluate(data)
   local spinning = data.spin ~= nil
 
@@ -632,12 +654,12 @@ function gui.open(player)
   end
   build_panel(player, data)
   data.open = true
-  player.opened = data.stake_inventory
+  player.opened = data.window_inventory
   gui.refresh(player)
 end
 
--- Einsatz zurück ins Inventar. Läuft gerade ein Dreh, wird sofort ausgezahlt
--- und das Ergebnis im Chat gemeldet.
+-- Einsatz und Gewinn zurück ins Inventar, Rest auf den Boden. Läuft gerade ein
+-- Dreh, wird sofort ausgezahlt und das Ergebnis im Chat gemeldet.
 local function cleanup(player)
   local data = storage.players[player.index]
   if data then
@@ -645,7 +667,7 @@ local function cleanup(player)
     if result then
       announce(player, result)
     end
-    gamble.return_stake(player, data)
+    gamble.return_items(player, data)
     data.open = false
     data.elems = nil
     data.last = nil
@@ -688,7 +710,13 @@ local function on_click(event)
   local tags = element.tags
   local pick = data.picker
 
-  if name == NAMES.spin then
+  if name == NAMES.stake then
+    gamble.click_slot(player, data.stake_inventory[1], event, true)
+    gui.refresh(player)
+  elseif name == NAMES.output then
+    gamble.click_slot(player, data.output_inventory[1], event, false)
+    gui.refresh(player)
+  elseif name == NAMES.spin then
     gamble.spin(player, data)
     -- Angehaltene Zeit (z.B. im Editor): ohne Ticks keine Animation, gleich auflösen
     if data.spin and game.tick_paused then
@@ -836,15 +864,12 @@ function gui.tick()
       elseif panel_open then
         local position = reel.position(spin.reel, spin.frame)
         draw_reel(elems, spin.reel, spin, position)
-        -- Klick genau in dem Frame, in dem ein Feld den Pfeil passiert. Rauscht die
-        -- Walze schneller als ein Feld alle 3 Frames, bleibt es still - sonst würden
-        -- Klicks verschluckt und klängen versetzt.
+        -- Klick genau in dem Frame, in dem ein Feld den Pfeil passiert. Beim schnellen
+        -- Durchrauschen höchstens jeden zweiten Frame, das klingt wie ein Rattern.
         local center = reel.center_index(position)
-        if center ~= spin.center then
-          if spin.frame - (spin.cross_frame or -10) >= 3 then
-            player.play_sound({ path = "utility/inventory_click" })
-          end
-          spin.cross_frame = spin.frame
+        if center ~= spin.center and spin.frame - (spin.click_frame or -10) >= 2 then
+          spin.click_frame = spin.frame
+          player.play_sound({ path = "utility/inventory_click" })
         end
         spin.center = center
       end

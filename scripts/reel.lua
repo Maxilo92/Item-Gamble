@@ -8,9 +8,9 @@
 --   normal  alles möglich
 --   lang    die Walze kriecht am Ende, meist ein Gewinn, manchmal ein bitterer
 --           Beinahe-Treffer
--- Beinahe-Treffer bleiben an der Kante zum Gewinnfeld hängen und kippen dann zurück
--- (oder rutschen gerade noch davon). Knappe Gewinne schieben sich über die Kante,
--- hängen kurz und rasten dann ein.
+-- Beinahe-Treffer (gut jede vierte Niete) stehen knapp neben einem Gewinnfeld und
+-- kippen beim Einrasten davon weg; nur wenn es sehr knapp ist, hängt die Walze kurz.
+-- Knappe Gewinne schieben sich über die Kante und rasten dann ein.
 --
 -- Das Ergebnis steht vorher fest, hier wird nur geplant, wie die Walze dorthin läuft.
 -- Der Plan liegt in storage, die Bewegung zählt eigene Frames: Speichern mitten im
@@ -19,6 +19,8 @@
 local reel = {}
 
 reel.SLOT = 40          -- Pixel pro Feld (Slot-Größe)
+reel.GAP = 6            -- Lücke zwischen zwei Feldern
+reel.PITCH = reel.SLOT + reel.GAP
 reel.VISIBLE = 9        -- sichtbare Felder, das mittlere steht unter dem Pfeil
 reel.CENTER = 4         -- Index des mittleren Feldes (0-basiert)
 local SETTLE = 24       -- Frames für das Einrasten in die Feldmitte
@@ -26,27 +28,29 @@ local SETTLE = 24       -- Frames für das Einrasten in die Feldmitte
 -- frames: Laufzeit bis zum Stehenbleiben, travel: Felder, power: wie lang das Auslaufen
 -- sich zieht (höher = längeres Kriechen am Ende), hold: Hängen an der Kante
 local TIERS = {
-  short = { frames = { 150, 195 }, travel = { 34, 44 }, power = 3, hold = 0 },
-  normal = { frames = { 220, 270 }, travel = { 48, 60 }, power = 3, hold = 12 },
-  long = { frames = { 300, 370 }, travel = { 58, 70 }, power = 4, hold = 40 },
+  short = { frames = { 150, 195 }, travel = { 30, 40 }, power = 3, hold = 0 },
+  normal = { frames = { 220, 270 }, travel = { 42, 54 }, power = 3, hold = 0 },
+  long = { frames = { 290, 350 }, travel = { 52, 62 }, power = 4, hold = 24 },
 }
 
 -- Wie weit (in Feldern) die Walze vor dem Einrasten danebensteht. Unter 0,5 bleibt
--- immer das Ergebnisfeld das nächstgelegene.
-local EDGE = { 0.42, 0.47 }
+-- immer das Ergebnisfeld das nächstgelegene. Knappe Fälle streuen, damit sie nicht
+-- jedes Mal gleich an der Kante kleben.
+local CLOSE = { 0.25, 0.45 }
+local HOLD_FROM = 0.4   -- erst so knapp bleibt die Walze kurz hängen
 local LOOSE = 0.3
 
 -- Jedes wievielte Feld ein Gewinnfeld ist. Nur Optik: Auch bei 1:100.000 soll das
 -- Zielitem regelmäßig vorbeiziehen, bei 75 % nicht jedes Feld eins sein.
 local function period_for(chance)
   if chance >= 0.4 then
-    return 2
-  elseif chance >= 0.2 then
     return 3
-  elseif chance >= 0.05 then
+  elseif chance >= 0.2 then
     return 4
+  elseif chance >= 0.05 then
+    return 5
   end
-  return 5
+  return 6
 end
 
 function reel.is_win(plan, index)
@@ -60,15 +64,15 @@ end
 -- Art des Drehs: was passiert, und wie lang er dauert
 local function choose_kind(rng, won)
   if won then
-    return "win", rng() < 0.65 and "long" or "normal"
+    return "win", rng() < 0.5 and "long" or "normal"
   end
   local roll = rng()
-  if roll < 0.35 then
-    return "near-ahead", rng() < 0.45 and "long" or "normal"
-  elseif roll < 0.55 then
-    return "near-behind", rng() < 0.3 and "long" or "normal"
+  if roll < 0.18 then
+    return "near-ahead", rng() < 0.35 and "long" or "normal"
+  elseif roll < 0.28 then
+    return "near-behind", rng() < 0.25 and "long" or "normal"
   end
-  return "miss", rng() < 0.75 and "short" or "normal"
+  return "miss", rng() < 0.6 and "short" or "normal"
 end
 
 -- Plant einen Dreh. rng ist storage.rng, damit auch die Optik deterministisch ist.
@@ -96,11 +100,11 @@ function reel.plan(rng, won, chance)
   -- Wo die Walze vor dem Einrasten steht: + heißt schon Richtung nächstes Feld
   local drift
   if kind == "near-ahead" then
-    drift = between(rng, EDGE)                    -- fast auf dem Gewinn, kippt zurück
+    drift = between(rng, CLOSE)                   -- fast auf dem Gewinn, kippt zurück
   elseif kind == "near-behind" then
-    drift = -between(rng, EDGE)                   -- gerade vom Gewinn gerutscht
+    drift = -between(rng, CLOSE)                  -- gerade vom Gewinn gerutscht
   elseif kind == "win" and tier_name == "long" then
-    drift = -between(rng, EDGE)                   -- gerade noch über die Kante
+    drift = -between(rng, CLOSE)                  -- gerade noch über die Kante
   else
     drift = (rng() * 2 - 1) * LOOSE
   end
@@ -109,12 +113,12 @@ function reel.plan(rng, won, chance)
   plan.tier = tier_name
   plan.stop = stop
   -- Ziel: Mitte des Stoppfeldes genau unter dem Pfeil
-  plan.travel = (stop - reel.CENTER) * reel.SLOT
-  plan.drift = drift * reel.SLOT
+  plan.travel = (stop - reel.CENTER) * reel.PITCH
+  plan.drift = drift * reel.PITCH
   plan.power = tier.power
   plan.run = rng(tier.frames[1], tier.frames[2])
   -- An der Kante hängen bleibt die Walze nur, wenn es wirklich knapp ist
-  plan.hold = math.abs(drift) >= EDGE[1] and tier.hold or 0
+  plan.hold = math.abs(drift) >= HOLD_FROM and tier.hold or 0
   plan.duration = plan.run + plan.hold + SETTLE
   return plan
 end
@@ -138,15 +142,16 @@ function reel.position(plan, frame)
   return plan.travel + plan.drift * (1 - ease_in_out(u))
 end
 
--- Erstes sichtbares Feld und wie viele Pixel davon links abgeschnitten sind
+-- Erstes sichtbares Feld und wie viele Pixel seiner Zelle (Feld + Lücke) links
+-- abgeschnitten sind
 function reel.window(position)
-  local first = math.floor(position / reel.SLOT)
-  return first, math.floor(position - first * reel.SLOT)
+  local first = math.floor(position / reel.PITCH)
+  return first, math.floor(position - first * reel.PITCH)
 end
 
 -- Welches Feld gerade unter dem Pfeil steht
 function reel.center_index(position)
-  return math.floor((position + (reel.CENTER + 0.5) * reel.SLOT) / reel.SLOT)
+  return math.floor((position + (reel.CENTER + 0.5) * reel.PITCH) / reel.PITCH)
 end
 
 return reel

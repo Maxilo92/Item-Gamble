@@ -156,3 +156,12 @@ User will genau den Vanilla-Dialog „Signal auswählen“ des Konstanten Kombin
 - `horizontal_spacing` auf einem Rahmen → Absturz beim Öffnen der Zielauswahl. Abstände gibt es nur bei Flows/Tabellen
 - `tools/check_mod.py` prüft jetzt Style-Eigenschaften gegen den Element-Typ (Quelle: *StyleSpecification in prototype-api.json)
 - User fragte, ob man „Signal auswählen“ nicht einfach triggern kann: nein, die API kennt dafür keinen Aufruf (nur `open_factoriopedia_gui`, `open_technology_gui`, `opened`)
+
+### 0.9.0: Slots im Panel, Gewinn-Slot
+
+User-Feedback zu 0.8.1: Near Misses zu forced; kein Ton in den ersten Sekunden; Einsatzfeld soll im neuen Panel sein, nicht im Inventarfenster; größerer Abstand zwischen Items; Output-Feld für Gewinne; beim Schließen nicht abgeholter Gewinn ins Inventar, bei vollem Inventar auf den Boden.
+
+- Geöffnet wird `game.create_inventory(0, titel)`: Factorio zeigt nur das Spielerinventar (linke Kistenhälfte). Einsatz und Gewinn sind eigene 1-Slot-Inventare, angezeigt als Slots im Panel, Bedienung in `gamble.click_slot` nach Vanilla (links/rechts/shift). Shift-Klick aus dem Spielerinventar in den Einsatz geht damit nicht (kein Ziel-Inventar offen)
+- Gewinn-Slot: `finish` legt den Gewinn hinein; belegt mit anderem Item oder zu voll → `output-blocked`, Dreh gesperrt
+- Walze: 6 px Lücke (`reel.PITCH`), Takt 3–6, Beinahe-Treffer ~19 % der Drehs, Drift 0,25–0,45 statt immer an der Kante, Hängen nur ab 0,4 (≈6 %)
+- Klick-Sound: bei jedem Feldwechsel, höchstens jeden 2. Frame

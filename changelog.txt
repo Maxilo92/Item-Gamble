@@ -1,4 +1,22 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.9.0
+Date: 2026-10-07
+  Features:
+    - Prize slot: wins land there instead of going straight into the inventory. Closing the window
+      moves uncollected prizes into your inventory, whatever does not fit drops to the ground.
+      Like a machine with a full output, the reel will not spin while a new prize would not fit.
+  Changes:
+    - The stake slot now sits in the gamble panel next to the target and the prize slot instead of
+      inside the inventory window. Stake and prize slots behave like vanilla slots: left click to
+      put in, take out or swap, right click to put in one item or take half, shift click to move
+      to the inventory.
+    - Larger spacing on the reel: win fields are further apart (every 3rd to 6th field) and there
+      are small gaps between fields.
+    - Near misses are rarer (about one spin in five) and less extreme; only very close ones hang
+      on the edge for a moment.
+  Bugfixes:
+    - The reel clicks from the very first moment of a spin again, rattling while it rushes by.
+---------------------------------------------------------------------------------------------------
 Version: 0.8.1
 Date: 2026-10-07
   Bugfixes:
