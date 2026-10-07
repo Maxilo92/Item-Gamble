@@ -248,6 +248,15 @@ User: MIT-Lizenz anlegen; ein 1:1-Gamble (gleiches Item, gleiche Menge) soll bei
 - `LICENSE` (MIT, Copyright Maxilo), wird von `tools/pack_mod.py` mitgepackt. Auf dem Portal beim Upload ebenfalls MIT wählen
 - Commit-Nachrichten mit Anführungszeichen über `git commit -F <datei>`, in PowerShell zerlegt `-m @'…'@` sonst die Argumente (0.19.0: Tag landete kurz auf dem falschen Commit)
 
+### 0.21.0: Freispins
+
+User: Niete kann zu 5 % ein Freispin sein, bei Multiplikator mehr Freispins, korrekt balancen, darf nicht ausnutzbar sein.
+
+- Einstellung `item-gamble-freespin-chance` (Standard 0,05, max. 0,25). Bei Niete N-mal würfeln (N = Multiplikator), jeder Freispin = ×1-Wette
+- Freispin spielt die **festgehaltene Wette** (`data.freespins`: Einsatz, Einsatzwert, Ziel, Menge, Chance, `left`), nie die aktuelle Einstellung. Gleiche Wetten werden zusammengefasst, max. 100 offen. Gutgeschrieben erst in `finish` (sonst verrät der Knopf das Ergebnis). Anstehende Freispins spielt der Drehen-Knopf zuerst („Freispin (N)“), Multiplikator dann aus
+- Walze: grüne Felder (`green_slot`, `utility/refresh`), Stoppfeld `{freespin = n}`
+- Im Spiel gemessen (Testkopie mit angehängter Simulation, `--benchmark`): Rückfluss 52–56 % inkl. Trostpreisen, Missbrauch (billig erspielen, teuer umstellen) greift nicht
+
 ### Arbeitsweise Cloud vs. lokal
 
 - In der Cloud gibt es kein Factorio. Der Push erreicht den lokalen Mod-Ordner (Junction) nur nach `git pull`, danach Factorio komplett neu starten (neue Einstellungen!) und `/gamble-recalc`

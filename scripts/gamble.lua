@@ -373,40 +373,150 @@ function gamble.evaluate(data)
   return state
 end
 
--- Startet einen Dreh. Der Einsatz ist sofort weg, das Ergebnis steht sofort fest
--- und liegt in data.spin. Ausgezahlt wird erst in gamble.finish, wenn die Walze
--- steht - sonst verriete das Inventar daneben den Gewinn vorher.
+-- ── Freispins ───────────────────────────────────────────────────────────────
+--
+-- Eine Niete kann Freispins bringen. Ein Freispin spielt genau die Wette, mit der er
+-- gewonnen wurde (Einsatz, Ziel, Menge, Chance), nur ohne Kosten - sonst könnte man
+-- Freispins mit billigen Wetten sammeln und auf teure umschalten. Eine ×N-Niete würfelt
+-- N-mal, jeder Freispin ist eine ×1-Wette: pro eingesetztem Item bringt der
+-- Multiplikator genauso viel Freispin-Wert wie ×1, nur gleichmäßiger.
+--
+-- Balance: Eine Wette bringt im Schnitt Maximum × Wertfaktor (Standard 50 %) des
+-- Einsatzwerts zurück, ein Freispin ist so viel wert. Bei Freispin-Chance p und
+-- Nachtriggern kommt man auf etwa 50 % ÷ (1 - p): bei 5 % rund 52,6 %. Die
+-- Einstellung ist auf 25 % begrenzt, damit das nie Pari erreicht.
+
+gamble.MAX_FREESPINS = 100   -- mehr sammeln sich nicht an
+
+local function same_bet(a, b)
+  return a.stake.name == b.stake.name and a.stake.quality == b.stake.quality
+    and a.stake.count == b.stake.count and a.name == b.name and a.quality == b.quality
+    and a.count == b.count and math.abs(a.chance - b.chance) < 1e-9
+end
+
+function gamble.freespins_left(data)
+  local left = 0
+  for _, bet in ipairs(data.freespins or {}) do
+    left = left + bet.left
+  end
+  return left
+end
+
+local function add_freespins(data, bet, count)
+  data.freespins = data.freespins or {}
+  count = math.min(count, gamble.MAX_FREESPINS - gamble.freespins_left(data))
+  if count <= 0 then
+    return
+  end
+  for _, queued in ipairs(data.freespins) do
+    if same_bet(queued, bet) then
+      queued.left = queued.left + count
+      return
+    end
+  end
+  data.freespins[#data.freespins + 1] = {
+    stake = { name = bet.stake.name, quality = bet.stake.quality, count = bet.stake.count },
+    stake_value = bet.stake_value,
+    name = bet.name,
+    quality = bet.quality,
+    count = bet.count,
+    chance = bet.chance,
+    left = count,
+  }
+end
+
+-- Die nächste Freispin-Wette, oder nil. Wetten mit Items, die es nicht mehr gibt
+-- (Mod entfernt), fallen weg.
+function gamble.next_freespin(data)
+  local queue = data.freespins
+  while queue and queue[1] do
+    local bet = queue[1]
+    if bet.left > 0 and prototypes.item[bet.name] and prototypes.item[bet.stake.name] then
+      return bet
+    end
+    table.remove(queue, 1)
+  end
+  return nil
+end
+
+-- Startet einen Dreh. Liegen Freispins an, wird zuerst einer davon gespielt, sonst
+-- ist der Einsatz sofort weg. Das Ergebnis steht sofort fest und liegt in data.spin.
+-- Ausgezahlt wird erst in gamble.finish, wenn die Walze steht - sonst verriete das
+-- Inventar daneben den Gewinn vorher.
 function gamble.spin(player, data)
-  local state = gamble.evaluate(data)
-  if not state.ok or data.spin then
-    return state
+  if data.spin then
+    return
   end
-
-  local multi = state.multi
-  local slot = data.stake_inventory[1]
-  local spent = state.stake.count * multi
-  if spent >= slot.count then
-    slot.clear()
+  local bet
+  local free = gamble.next_freespin(data)
+  if free then
+    if not output_accepts(data, free) then
+      return
+    end
+    free.left = free.left - 1
+    if free.left <= 0 then
+      table.remove(data.freespins, 1)
+    end
+    bet = {
+      stake = free.stake,
+      stake_value = free.stake_value,
+      name = free.name,
+      quality = free.quality,
+      count = free.count,
+      chance = free.chance,
+      multi = 1,
+      free = true,
+    }
   else
-    slot.count = slot.count - spent
+    local state = gamble.evaluate(data)
+    if not state.ok then
+      return
+    end
+    local slot = data.stake_inventory[1]
+    local spent = state.stake.count * state.multi
+    if spent >= slot.count then
+      slot.clear()
+    else
+      slot.count = slot.count - spent
+    end
+    bet = {
+      stake = state.stake,
+      stake_value = state.stake_value,
+      name = data.target.name,
+      quality = data.target.quality,
+      count = state.count,
+      chance = state.chance,
+      multi = state.multi,
+    }
   end
+  local multi = bet.multi
 
-  -- Ein Wurf: Gewinn, sonst eventuell ein Trostpreis. Beides mal Multiplikator.
+  -- Ein Wurf: Gewinn, sonst eventuell Freispins und ein Trostpreis, beides je
+  -- Multiplikator-Stufe gewürfelt bzw. vervielfacht.
   local rng = storage.rng
   local density = settings.global["item-gamble-consolation-chance"].value
-  local pick = values.prize_picker(rng, state.stake_value)
-  local won = rng() < state.chance
-  local prize
-  if not won and density > 0 and rng() < density then
-    prize = pick()
+  local freespin_chance = settings.global["item-gamble-freespin-chance"].value
+  local pick = values.prize_picker(rng, bet.stake_value)
+  local won = rng() < bet.chance
+  local prize, freespins = nil, 0
+  if not won then
+    for _ = 1, multi do
+      if rng() < freespin_chance then
+        freespins = freespins + 1
+      end
+    end
+    if density > 0 and rng() < density then
+      prize = pick()
+    end
   end
 
-  -- Die Walze zeigt das Ergebnis: ein Gewinn, sonst ein Trostpreis oder ein leeres Feld.
-  -- Ihre Felder tragen die einfachen Mengen, die GUI zeigt sie mal Multiplikator.
-  local plan = reel.plan(rng, won, state.chance, { density = density, pick = pick })
-  if not won and (prize or plan.fill) then
+  -- Die Walze zeigt das Ergebnis: ein Gewinn, sonst Freispins, ein Trostpreis oder ein
+  -- leeres Feld. Ihre Felder tragen die einfachen Mengen, die GUI zeigt sie mal
+  -- Multiplikator.
+  local plan = reel.plan(rng, won, bet.chance, { density = density, pick = pick, freespin = freespin_chance })
+  if not won and (prize or freespins > 0 or plan.fill) then
     plan.fill = plan.fill or {}
-    plan.fill[plan.stop] = prize
+    plan.fill[plan.stop] = freespins > 0 and { freespin = freespins } or prize
   end
   local prizes = {}
   if prize then
@@ -417,17 +527,19 @@ function gamble.spin(player, data)
     won = won,
     wins = won and 1 or 0,
     multi = multi,
-    chance = state.chance,
-    name = data.target.name,
-    quality = data.target.quality,
-    count = state.count * multi,
-    stake = state.stake,
+    free = bet.free,
+    freespins = freespins,
+    bet = bet,
+    chance = bet.chance,
+    name = bet.name,
+    quality = bet.quality,
+    count = bet.count * multi,
+    stake = bet.stake,
     frame = 0,
     reel = plan,
     prizes = prizes,
   }
   storage.spins[player.index] = true
-  return state
 end
 
 -- Walze steht (oder der Dreh wird abgebrochen, z.B. beim Schließen): auszahlen.
@@ -439,6 +551,10 @@ function gamble.finish(player, data)
   end
   data.spin = nil
   storage.spins[player.index] = nil
+  -- Freispins gelten ab jetzt, vorher würde der Knopf sie verraten
+  if (result.freespins or 0) > 0 and result.bet then
+    add_freespins(data, result.bet, result.freespins)
+  end
   -- Gewinne und Trostpreise in den Gewinn-Bereich; was nicht passt (z.B. Abbruch beim
   -- Schließen, viele Drehs), ins Inventar, der Rest auf den Boden
   local function pay(paid)

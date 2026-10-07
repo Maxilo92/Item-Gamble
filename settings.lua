@@ -53,4 +53,14 @@ data:extend({
     maximum_value = 1,
     order = "e",
   },
+  {
+    type = "double-setting",
+    name = "item-gamble-freespin-chance",
+    setting_type = "runtime-global",
+    default_value = 0.05,
+    minimum_value = 0,
+    -- Darüber käme man mit Freispins im Schnitt in die Nähe von Pari
+    maximum_value = 0.25,
+    order = "f",
+  },
 })

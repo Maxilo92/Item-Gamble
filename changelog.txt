@@ -1,4 +1,17 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.21.0
+Date: 2026-10-07
+  Features:
+    - Free spins: a miss gives a free spin with a 5 % chance (mod setting, at most 25 %). At xN it
+      rolls N times, so bigger multipliers bring more free spins. Free spin fields are green on the
+      wheel.
+    - A free spin plays exactly the bet it was won with (stake, target, amount, chance) at x1 and
+      costs nothing. Switching to a more valuable target does not carry free spins over. Pending
+      free spins are played first, the Spin button shows how many are left.
+  Balancing:
+    - Free spins and consolation prizes together bring the average return from 50 % to about
+      52 to 56 % of the stake value, measured over 120,000 spins. Gambling stays a loss on average.
+---------------------------------------------------------------------------------------------------
 Version: 0.20.0
 Date: 2026-10-07
   Balancing:

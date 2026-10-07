@@ -396,6 +396,11 @@ local function draw_reel(elems, plan, shown, position)
         button.sprite = "item/" .. shown.name
         button.quality = shown.quality
         button.number = shown.count
+      elseif prize and prize.freespin then
+        button.style = "green_slot"
+        button.sprite = "utility/refresh"
+        button.quality = nil
+        button.number = prize.freespin > 1 and prize.freespin or nil
       elseif prize then
         button.style = "slot_button"
         button.sprite = "item/" .. prize.name
@@ -444,10 +449,18 @@ local function result_caption(last)
   local wins = last.wins or (last.won and 1 or 0)
   local prizes = last.prizes or (last.prize and { last.prize }) or {}
   local spilled = (last.spilled or 0) + (last.prize_spilled or 0)
+  local freespins = last.freespins or 0
   local text, style
   if wins > 0 then
     text = { "item-gamble.result-won", wins * last.count, rich_item(last.name, last.quality) }
     style = "bold_green_label"
+  elseif freespins > 0 then
+    text = { "item-gamble.result-freespins", freespins }
+    style = "bold_green_label"
+    if #prizes > 0 then
+      text = { "", text, "  ", { "item-gamble.result-plus-prize", prizes[1].count,
+        rich_item(prizes[1].name, prizes[1].quality) } }
+    end
   elseif #prizes > 0 then
     text = { "item-gamble.result-consolation", prizes[1].count, rich_item(prizes[1].name, prizes[1].quality) }
     style = "bold_label"
@@ -560,12 +573,15 @@ function gui.refresh(player, typing)
   show_amount(elems.target_slider, elems.target_amount, state.count, state.max_count,
     not spinning, typing == NAMES.target_amount)
 
+  -- Anstehende Freispins werden zuerst gespielt, mit ihrer eigenen festen Wette
+  local free = not spinning and gamble.next_freespin(data)
+
   -- Multiplikator: vervielfacht Einsatz und Gewinn, die Gesamtmengen stehen neben den Slots
   local multi = spinning and (data.spin.multi or 1) or state.multi
     or math.max(1, math.min(math.floor(data.multi or 1), gamble.MAX_MULTI))
   elems.multi.caption = "×" .. multi
-  elems.multi.enabled = not spinning
-  local show_totals = multi > 1 and not spinning
+  elems.multi.enabled = not spinning and not free
+  local show_totals = multi > 1 and not spinning and not free
   elems.stake_total.caption = show_totals and stake and { "item-gamble.total", multi, stake.count * multi } or ""
   elems.target_total.caption = show_totals and state.count and { "item-gamble.total", multi, state.count * multi } or ""
 
@@ -574,6 +590,9 @@ function gui.refresh(player, typing)
   local chance = elems.chance
   if spinning then
     set_label(chance, chance_caption(data.spin.chance), "heading_2_label")
+  elseif free then
+    set_label(chance, { "item-gamble.freespin-bet", free.stake.count, rich_item(free.stake.name, free.stake.quality),
+      free.count, rich_item(free.name, free.quality), chance_caption(free.chance) }, "bold_green_label")
   elseif PROBLEM_KEYS[state.problem] then
     set_label(chance, problem_caption(state, data), "bold_red_label")
   elseif HINT_KEYS[state.problem] then
@@ -584,7 +603,7 @@ function gui.refresh(player, typing)
     set_label(chance, { "item-gamble.chance-none" }, "heading_2_label")
   end
   chance.style.bottom_margin = 4
-  if state.stake_value and state.target_value and not spinning then
+  if state.stake_value and state.target_value and not spinning and not free then
     local stake_value = format_number(state.stake_value * multi)
     if stake.spoil > 0 then
       stake_value = { "item-gamble.value-fresh", stake_value, string.format("%.0f", (1 - stake.spoil) * 100) }
@@ -599,8 +618,14 @@ function gui.refresh(player, typing)
     set_label(elems.result, result_caption(data.last))
   end
 
-  elems.spin.enabled = state.ok and not spinning
-  elems.spin.caption = spinning and { "item-gamble.spinning" } or { "item-gamble.spin" }
+  elems.spin.enabled = (free or state.ok) and not spinning
+  if spinning then
+    elems.spin.caption = { "item-gamble.spinning" }
+  elseif free then
+    elems.spin.caption = { "item-gamble.freespin", gamble.freespins_left(data) }
+  else
+    elems.spin.caption = { "item-gamble.spin" }
+  end
   if not spinning then
     draw_idle_reel(elems, data)
   end
@@ -972,7 +997,7 @@ local function on_click(event)
     -- Angehaltene Zeit (z.B. im Editor): ohne Ticks keine Animation, gleich auflösen
     if data.spin and game.tick_paused then
       local result = gamble.finish(player, data)
-      if result.won then
+      if result.won or (result.freespins or 0) > 0 then
         player.play_sound({ path = "utility/achievement_unlocked" })
       end
     end
@@ -1111,7 +1136,7 @@ function gui.tick()
       local panel_open = elems ~= nil and elems.window.valid
       if spin.frame >= spin.reel.duration then
         local result = gamble.finish(player, data)
-        if result.won then
+        if result.won or (result.freespins or 0) > 0 then
           player.play_sound({ path = "utility/achievement_unlocked" })
         end
         if panel_open then

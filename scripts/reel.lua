@@ -61,7 +61,8 @@ function reel.is_win(plan, index)
   return index % plan.period == plan.phase
 end
 
--- Trostpreis auf diesem Feld (nur Nieten-Felder), sonst nil
+-- Trostpreis ({name, quality, count}) oder Freispins ({freespin = n}) auf diesem Feld
+-- (nur Nieten-Felder), sonst nil
 function reel.prize(plan, index)
   return plan.fill and not reel.is_win(plan, index) and plan.fill[index] or nil
 end
@@ -102,12 +103,18 @@ end
 function reel.plan(rng, won, chance, consolation)
   local period = period_for(chance)
   local plan = { period = period, wins = place_wins(rng, period) }
-  -- Trostpreise auf einem Teil der Nieten-Felder, der Rest bleibt leer
-  if consolation and consolation.density > 0 then
+  -- Freispins und Trostpreise auf einem Teil der Nieten-Felder, der Rest bleibt leer.
+  -- Nur Optik: Was man bekommt, legt gamble.spin auf das Stoppfeld.
+  local freespin = consolation and consolation.freespin or 0
+  if consolation and (consolation.density > 0 or freespin > 0) then
     plan.fill = {}
     for index = 0, LAST_INDEX do
-      if not plan.wins[index] and rng() < consolation.density then
-        plan.fill[index] = consolation.pick()
+      if not plan.wins[index] then
+        if rng() < freespin then
+          plan.fill[index] = { freespin = 1 }
+        elseif rng() < consolation.density then
+          plan.fill[index] = consolation.pick()
+        end
       end
     end
   end
