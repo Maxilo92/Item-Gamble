@@ -212,6 +212,14 @@ User: UI gefällt noch nicht ganz, v.a. die Knöpfe; neben Drehen ein grüner Kn
 - Gewinn-Bereich: eine Reihe mit 10 Slots unter der Walze; Ergebnistext kurz, Trostpreise bei mehreren Drehs nur als Symbole
 - Zuerst lokal als 0.14.0 gebaut, kollidierte mit der Release-Vorbereitung 0.14.0 aus der Cloud (Thumbnail, README, `tools/pack_mod.py`); auf 0.15.0 umnummeriert. Installiert ist jetzt eine Zip aus `pack_mod.py`, kein Junction mehr. Autor in info.json: Maxilo
 
+### 0.16.0: Multiplikator vervielfacht, Gewinn-Bereich wächst
+
+User zu 0.15.0: jetzt zu wenig Text, Einsatz- und Zielfeld unklar; der Multiplikator soll Einsatz und Gewinn vervielfachen, **nicht** mehrfach drehen; Gewinn-Slots sollen mitwachsen, nach unten darf es weitergehen.
+
+- Ein Dreh, ein Wurf: Einsatz = Menge × Multiplikator, Gewinn = Zielmenge × Multiplikator (auch Trostpreis). Chance unverändert. `state.multi`/`max_multi`, `gamble.MAX_MULTI`; `data.spin.count` ist schon vervielfacht, `data.spin.multi` dient der Walze (Trostpreis-Felder tragen einfache Mengen)
+- Beschriftungen Einsatz/Ziel zurück, Spalte mit „× 5 = 500“, Hinweise bei leerem Einsatz/Ziel (normal statt rot) über der Walze, Tooltips erklären wieder kurz
+- `gamble.fit_output`: Gewinn-Inventar per `resize` auf belegte Slots + Gewinn-Stacks + 1, auf Reihen à 10 gerundet, max. 200. Schrumpft nur über leere Slots am Ende (resize löscht Items dahinter), nicht während eines Drehs. GUI baut die Gewinn-Slots neu, wenn sich die Größe ändert; ab 8 Reihen Scroll
+
 ### Arbeitsweise Cloud vs. lokal
 
 - In der Cloud gibt es kein Factorio. Der Push erreicht den lokalen Mod-Ordner (Junction) nur nach `git pull`, danach Factorio komplett neu starten (neue Einstellungen!) und `/gamble-recalc`

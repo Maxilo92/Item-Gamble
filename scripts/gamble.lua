@@ -1,18 +1,20 @@
 -- Spiellogik ohne GUI: Einsatz, Chance, Dreh, Auszahlung.
 --
--- Einsatz und Gewinn liegen in je einem 1-Slot-Inventar (game.create_inventory) und
--- werden im Glücksrad-Panel als Slots angezeigt, die sich wie Vanilla-Slots bedienen
--- lassen. Ein Slot heißt automatisch: höchstens ein Stack.
--- Der Einsatz-Slot ist ein Vorrat: pro Dreh wird nur die eingestellte Menge eingesetzt,
--- so kann man nach einer Niete sofort weiterdrehen. Gewinne landen im Gewinn-Slot.
+-- Einsatz und Gewinn liegen in eigenen Script-Inventaren (game.create_inventory) und
+-- werden im Glücksrad-Fenster als Slots angezeigt, die sich wie Vanilla-Slots bedienen
+-- lassen. Der Einsatz ist ein Slot, also höchstens ein Stack.
+-- Der Einsatz-Slot ist ein Vorrat: pro Dreh wird die eingestellte Menge mal
+-- Multiplikator eingesetzt, so kann man nach einer Niete sofort weiterdrehen. Gewinne
+-- landen im Gewinn-Bereich, der mit dem möglichen Gewinn wächst (fit_output).
 
 local values = require("scripts.values")
 local reel = require("scripts.reel")
 
 local gamble = {}
 
-gamble.OUTPUT_SLOTS = 10   -- Gewinn-Slots im Panel
-gamble.MAX_SPINS = 100     -- Drehs pro Knopfdruck
+gamble.OUTPUT_COLUMNS = 10      -- Gewinn-Bereich: Slots pro Reihe, mindestens eine Reihe
+gamble.MAX_OUTPUT_SLOTS = 200   -- wächst mit dem möglichen Gewinn bis hierhin
+gamble.MAX_MULTI = 100     -- höchster Multiplikator für Einsatz und Gewinn
 
 -- Spieler bekommt Items, was nicht passt, fällt vor der Spielfigur auf den Boden.
 -- stack ist ein LuaItemStack oder eine Tabelle {name, quality, count}.
@@ -80,19 +82,45 @@ function gamble.get(player_index)
   end
   local output = data.output_inventory
   if not (output and output.valid) then
-    data.output_inventory = game.create_inventory(gamble.OUTPUT_SLOTS)
-  elseif #output ~= gamble.OUTPUT_SLOTS then
-    -- Gewinn-Slot aus 0.12.0 und früher hatte nur einen Platz: Inhalt umziehen
-    local bigger = game.create_inventory(gamble.OUTPUT_SLOTS)
-    for i = 1, #output do
-      if output[i].valid_for_read then
-        bigger.insert(output[i])
-      end
-    end
-    output.destroy()
-    data.output_inventory = bigger
+    data.output_inventory = game.create_inventory(gamble.OUTPUT_COLUMNS)
+  elseif #output < gamble.OUTPUT_COLUMNS then
+    -- Gewinn-Slot aus 0.12.0 und früher hatte nur einen Platz
+    output.resize(gamble.OUTPUT_COLUMNS)
   end
   return data
+end
+
+-- Gewinn-Bereich an den möglichen Gewinn anpassen: belegte Slots + Stacks für den
+-- Gewinn + ein Platz für einen Trostpreis, auf volle Reihen aufgerundet. resize löscht
+-- Items hinter der neuen Größe, deshalb schrumpft er nur über leere Slots am Ende.
+-- Während eines Drehs bleibt er, wie er ist: der Gewinn steht noch aus.
+-- Gibt true zurück, wenn sich die Größe geändert hat.
+function gamble.fit_output(data, state)
+  local output = data.output_inventory
+  if data.spin then
+    return false
+  end
+  local last = 0
+  for i = #output, 1, -1 do
+    if output[i].valid_for_read then
+      last = i
+      break
+    end
+  end
+  local wanted = last + 1
+  if data.target and state.count then
+    local stack_size = prototypes.item[data.target.name].stack_size
+    wanted = wanted + math.ceil(state.count * (state.multi or 1) / stack_size)
+  end
+  local columns = gamble.OUTPUT_COLUMNS
+  local size = math.ceil(wanted / columns) * columns
+  size = math.max(columns, math.min(gamble.MAX_OUTPUT_SLOTS, size))
+  size = math.max(size, math.ceil(last / columns) * columns)
+  if size == #output then
+    return false
+  end
+  output.resize(size)
+  return true
 end
 
 local function quality_name(quality)
@@ -276,9 +304,10 @@ function gamble.evaluate(data)
       available = slot.count,
       spoil = slot.spoil_percent,
     }
-    -- Mehrere Drehs auf einmal, soweit der Vorrat reicht
-    state.max_spins = math.max(1, math.min(gamble.MAX_SPINS, math.floor(slot.count / count)))
-    state.spins = math.max(1, math.min(math.floor(data.multi or 1), state.max_spins))
+    -- Der Multiplikator vervielfacht Einsatz und Gewinn eines Drehs, soweit der Vorrat reicht.
+    -- Die Chance bleibt gleich, beide Seiten wachsen im selben Verhältnis.
+    state.max_multi = math.max(1, math.min(gamble.MAX_MULTI, math.floor(slot.count / count)))
+    state.multi = math.max(1, math.min(math.floor(data.multi or 1), state.max_multi))
     if values.is_selectable(slot.name) and not has_equipment(slot) then
       state.stake_value = values.stack(slot.name, slot.quality.name, count, slot.spoil_percent)
     end
@@ -323,53 +352,45 @@ function gamble.spin(player, data)
     return state
   end
 
+  local multi = state.multi
   local slot = data.stake_inventory[1]
-  local spent = state.stake.count * state.spins
+  local spent = state.stake.count * multi
   if spent >= slot.count then
     slot.clear()
   else
     slot.count = slot.count - spent
   end
 
-  -- Jeder Dreh würfelt einzeln: Gewinn, sonst eventuell ein Trostpreis
+  -- Ein Wurf: Gewinn, sonst eventuell ein Trostpreis. Beides mal Multiplikator.
   local rng = storage.rng
   local density = settings.global["item-gamble-consolation-chance"].value
   local pick = values.prize_picker(rng, state.stake_value)
-  local wins, prizes, by_key, first_prize = 0, {}, {}, nil
-  for _ = 1, state.spins do
-    if rng() < state.chance then
-      wins = wins + 1
-    elseif density > 0 and rng() < density then
-      local prize = pick()
-      if prize then
-        first_prize = first_prize or prize
-        local key = prize.name .. "/" .. prize.quality
-        if by_key[key] then
-          by_key[key].count = by_key[key].count + prize.count
-        else
-          by_key[key] = { name = prize.name, quality = prize.quality, count = prize.count }
-          prizes[#prizes + 1] = by_key[key]
-        end
-      end
-    end
+  local won = rng() < state.chance
+  local prize
+  if not won and density > 0 and rng() < density then
+    prize = pick()
   end
-  local won = wins > 0
 
-  -- Die Walze zeigt das Ergebnis: ein Gewinn, sonst ein Trostpreis oder ein leeres Feld
+  -- Die Walze zeigt das Ergebnis: ein Gewinn, sonst ein Trostpreis oder ein leeres Feld.
+  -- Ihre Felder tragen die einfachen Mengen, die GUI zeigt sie mal Multiplikator.
   local plan = reel.plan(rng, won, state.chance, { density = density, pick = pick })
-  if not won and (first_prize or plan.fill) then
+  if not won and (prize or plan.fill) then
     plan.fill = plan.fill or {}
-    plan.fill[plan.stop] = first_prize
+    plan.fill[plan.stop] = prize
+  end
+  local prizes = {}
+  if prize then
+    prizes[1] = { name = prize.name, quality = prize.quality, count = prize.count * multi }
   end
   data.last = nil
   data.spin = {
     won = won,
-    wins = wins,
-    spins = state.spins,
+    wins = won and 1 or 0,
+    multi = multi,
     chance = state.chance,
     name = data.target.name,
     quality = data.target.quality,
-    count = state.count,
+    count = state.count * multi,
     stake = state.stake,
     frame = 0,
     reel = plan,

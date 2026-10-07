@@ -1,4 +1,15 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.16.0
+Date: 2026-10-07
+  Changes:
+    - The multiplier no longer spins several times. It multiplies stake and prize of a single
+      spin: x5 stakes five times the amount and wins five times the target (consolation prizes
+      too). The chance stays the same. The totals are shown next to the stake and target slots.
+    - Stake and target have their labels back, with clearer tooltips. An empty stake or a missing
+      target shows a short hint above the wheel.
+    - The prize area grows with the possible prize, one row at a time (scrolls beyond 8 rows), and
+      shrinks again over empty slots.
+---------------------------------------------------------------------------------------------------
 Version: 0.15.0
 Date: 2026-10-07
   Changes:
