@@ -15,7 +15,7 @@ end)
 script.on_configuration_changed(function()
   gamble.init()
   values.rebuild()
-  gui.refresh_all()
+  gui.reopen_all()
 end)
 
 -- Der Fortschritt steckt in den gespeicherten Werten, Qualität und Chancen nicht

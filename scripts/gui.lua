@@ -3,9 +3,15 @@
 -- Bedienung wie im Spiel: Linksklick auf einen Inventar-Slot legt den ganzen Stack
 -- in den Einsatz, Rechtsklick ein einzelnes Item. Am Einsatz-Slot genauso zurück.
 -- Die Items bleiben bis zum Drehen im Inventar; das Raster zeigt, was übrig bleibt.
+--
+-- Die Walze ist ein Scroll-Bereich ohne Scrollbalken, der überstehende Felder
+-- abschneidet. Darin liegt eine Reihe Slots; das erste bekommt einen negativen
+-- linken Rand, so wandert die Reihe pixelweise. Ist ein Feld durch, rücken die
+-- Symbole eins weiter und der Rand springt zurück.
 
 local gamble = require("scripts.gamble")
 local values = require("scripts.values")
+local reel = require("scripts.reel")
 
 local gui = {}
 
@@ -118,7 +124,7 @@ local function build(player, data)
     style = "inside_shallow_frame_with_padding_and_vertical_spacing",
     direction = "vertical",
   })
-  panel.style.minimal_width = 340
+  panel.style.minimal_width = reel.VISIBLE * reel.SLOT + 32
   panel.style.vertically_stretchable = true
 
   local grid = panel.add({ type = "table", column_count = 3 })
@@ -171,6 +177,31 @@ local function build(player, data)
   chance_row.add({ type = "label", style = "bold_label", caption = { "item-gamble.chance-label" } })
   local chance = chance_row.add({ type = "label", style = "heading_2_label" })
 
+  local reel_box = panel.add({ type = "flow", direction = "vertical" })
+  reel_box.style.horizontal_align = "center"
+  reel_box.style.horizontally_stretchable = true
+  reel_box.style.vertical_spacing = 0
+  local reel_frame = reel_box.add({ type = "frame", style = "deep_frame_in_shallow_frame" })
+  local viewport = reel_frame.add({
+    type = "scroll-pane",
+    style = "naked_scroll_pane",
+    horizontal_scroll_policy = "never",
+    vertical_scroll_policy = "never",
+  })
+  viewport.style.width = reel.VISIBLE * reel.SLOT
+  viewport.style.height = reel.SLOT
+  viewport.style.padding = 0
+  local strip = viewport.add({ type = "flow", direction = "horizontal", ignored_by_interaction = true })
+  strip.style.horizontal_spacing = 0
+  local reel_slots = {}
+  for i = 1, reel.VISIBLE + 1 do
+    reel_slots[i] = strip.add({ type = "sprite-button", style = "slot_button" })
+  end
+  local pointer = reel_box.add({ type = "sprite", sprite = "utility/indication_arrow" })
+  pointer.style.width = 24
+  pointer.style.height = 24
+  pointer.style.stretch_image_to_widget_size = true
+
   local message = wrapping_label(panel)
   local result = wrapping_label(panel)
 
@@ -207,6 +238,7 @@ local function build(player, data)
     message = message,
     result = result,
     spin = spin,
+    reel_slots = reel_slots,
   }
 end
 
@@ -274,6 +306,41 @@ local function set_label(label, caption, style)
   label.style.maximal_width = 340
 end
 
+-- Walze auf eine Position zeichnen. symbols nil = leere Walze.
+-- Symbole und Styles werden nur neu gesetzt, wenn ein Feld weitergerückt ist.
+local function draw_reel(elems, symbols, shown, position)
+  local first, offset = reel.window(position)
+  local slots = elems.reel_slots
+  if elems.reel_first ~= first or elems.reel_symbols ~= symbols then
+    elems.reel_first = first
+    elems.reel_symbols = symbols
+    for k, button in ipairs(slots) do
+      if symbols and symbols[first + k - 1] then
+        button.style = "yellow_slot_button"
+        button.sprite = "item/" .. shown.name
+        button.quality = shown.quality
+        button.number = shown.count
+      else
+        button.style = "slot_button"
+        button.sprite = ""
+        button.quality = nil
+        button.number = nil
+      end
+    end
+  end
+  slots[1].style.left_margin = -offset
+end
+
+-- Was die Walze außerhalb eines Drehs zeigt: wo der letzte Dreh stehen blieb
+local function draw_idle_reel(elems, data)
+  local last = data.last
+  if last and last.reel_end then
+    draw_reel(elems, last.reel_end.symbols, last, last.reel_end.travel)
+  else
+    draw_reel(elems, nil, nil, 0)
+  end
+end
+
 function gui.refresh(player)
   local data = storage.players[player.index]
   local elems = data and data.elems
@@ -282,6 +349,7 @@ function gui.refresh(player)
   end
   local state = gamble.evaluate(player, data)
   refresh_inventory(player, data)
+  local spinning = data.spin ~= nil
 
   local stake = elems.stake
   if state.stake then
@@ -308,7 +376,10 @@ function gui.refresh(player)
   elems.max_count.caption = state.max_count and { "item-gamble.max-count", state.max_count } or ""
   elems.target_value.caption = state.target_value and { "item-gamble.value", format_number(state.target_value) } or ""
 
-  if state.chance then
+  if spinning then
+    elems.chance.caption = chance_caption(data.spin.chance)
+    elems.chance.style = "heading_2_label"
+  elseif state.chance then
     elems.chance.caption = chance_caption(state.chance)
     elems.chance.style = state.ok and "heading_2_label" or "bold_red_label"
   else
@@ -316,8 +387,8 @@ function gui.refresh(player)
     elems.chance.style = "heading_2_label"
   end
 
-  elems.message.visible = state.problem ~= nil
-  if state.problem then
+  elems.message.visible = state.problem ~= nil and not spinning
+  if state.problem and not spinning then
     set_label(elems.message, problem_caption(state, data), HINTS[state.problem] and "label" or "bold_red_label")
   end
 
@@ -326,7 +397,13 @@ function gui.refresh(player)
     set_label(elems.result, result_caption(data.last))
   end
 
-  elems.spin.enabled = state.ok
+  elems.target.enabled = not spinning
+  elems.count.enabled = not spinning
+  elems.spin.enabled = state.ok and not spinning
+  elems.spin.caption = spinning and { "item-gamble.spinning" } or { "item-gamble.spin" }
+  if not spinning then
+    draw_idle_reel(elems, data)
+  end
 end
 
 function gui.refresh_all()
@@ -346,10 +423,19 @@ function gui.open(player)
   player.opened = data.elems.window
 end
 
--- Der Einsatz liegt noch im Inventar, beim Schließen muss nichts zurück
+local function announce(player, result)
+  player.print((result_caption(result)))
+end
+
+-- Der Einsatz liegt noch im Inventar, beim Schließen muss nichts zurück.
+-- Läuft gerade ein Dreh, wird sofort ausgezahlt und das Ergebnis im Chat gemeldet.
 function gui.close(player)
   local data = storage.players[player.index]
   if data then
+    local result = gamble.finish(player, data)
+    if result then
+      announce(player, result)
+    end
     data.elems = nil
     data.stake = nil
     data.stake_count = 0
@@ -381,6 +467,9 @@ local function on_click(event)
   local player = game.get_player(event.player_index)
   local whole = event.button == defines.mouse_button_type.left
   local slot = element.tags[SLOT_TAG]
+  if gamble.get(player.index).spin and element.name ~= NAMES.close then
+    return
+  end
   if slot then
     local data = gamble.get(player.index)
     local problem = gamble.add_stake(player, data, slot, whole)
@@ -415,6 +504,10 @@ local function on_elem_changed(event)
   local player = game.get_player(event.player_index)
   local data = gamble.get(player.index)
   local value = element.elem_value
+  if data.spin then
+    element.elem_value = data.target and { name = data.target.name, quality = data.target.quality } or nil
+    return
+  end
   if not value then
     data.target = nil
   elseif values.is_selectable(value.name) then
@@ -465,7 +558,58 @@ local function on_location_changed(event)
   end
 end
 
+-- Jeden Tick: laufende Walzen bewegen, fertige auszahlen
+function gui.tick(event)
+  local spins = storage.spins
+  if not (spins and next(spins)) then
+    return
+  end
+  for index in pairs(spins) do
+    local player = game.get_player(index)
+    local data = storage.players[index]
+    if not (player and data and data.spin) then
+      spins[index] = nil
+    else
+      local spin = data.spin
+      local elapsed = event.tick - spin.start
+      local elems = data.elems
+      local window_open = elems ~= nil and elems.window.valid
+      if elapsed >= reel.DURATION then
+        local result = gamble.finish(player, data)
+        if result.won then
+          player.play_sound({ path = "utility/achievement_unlocked" })
+        end
+        if window_open then
+          gui.refresh(player)
+        else
+          announce(player, result)
+        end
+      elseif window_open then
+        local position = reel.position(spin.reel, elapsed)
+        draw_reel(elems, spin.reel.symbols, spin, position)
+        -- Leises Klicken, wenn ein Feld den Pfeil passiert (höchstens alle 4 Ticks)
+        local center = reel.center_index(position)
+        if center ~= spin.center and event.tick - (spin.click_tick or 0) >= 4 then
+          spin.click_tick = event.tick
+          player.play_sound({ path = "utility/inventory_click" })
+        end
+        spin.center = center
+      end
+    end
+  end
+end
+
+-- Nach einem Mod-Update: offene Fenster neu aufbauen, die alten Elemente sind vergessen
+function gui.reopen_all()
+  for _, player in pairs(game.players) do
+    if player.gui.screen[WINDOW] then
+      gui.open(player)
+    end
+  end
+end
+
 function gui.register_events()
+  script.on_event(defines.events.on_tick, gui.tick)
   script.on_event(defines.events.on_gui_click, on_click)
   script.on_event(defines.events.on_gui_closed, on_closed)
   script.on_event(defines.events.on_gui_elem_changed, on_elem_changed)

@@ -57,7 +57,7 @@ Ergebnis wird **vor** der Animation festgelegt, die Animation ist nur Show. Zust
 
 ## Noch offen
 
-- Walze oder Balken? (User noch nicht entschieden, Walze empfohlen)
+- ~~Walze oder Balken?~~ → **Walze** (User: "weiter mit Schritt 4, der Walze")
 - ~~Unter der Minimalchance~~ → **gesperrt** (User: "weiter" auf Empfehlung, 2026-10-07)
 - Zugang: vorerst Shortcut-Leiste + Hotkey ALT+G. Eigenes Gebäude ("Glücksautomat") kann später dazukommen.
 
@@ -105,3 +105,11 @@ User-Feedback zu 0.3.0: zwei Fenster (eigenes + Inventar) sind eins zu viel, und
 - `scripts/gamble.lua` ohne GUI: `add_stake`, `remove_stake`, `reserved`, `evaluate`, `spin` (Ergebnis in `data.last` bevor angezeigt wird, Grundlage für Schritt 4). Migration räumt das Einsatz-Inventar aus 0.3.0 ab und gibt Items zurück
 - Drehen zeigt das Ergebnis vorerst sofort als Text, die Walze kommt in Schritt 4
 - Headless getestet mit nachgebautem Spieler (Klicklogik, Stack-Grenze, Qualität, Frische, Abzug beim Drehen). GUI nur statisch geprüft
+
+### Schritt 4 (0.5.0): Walze
+
+- `scripts/reel.lua`: Planung (Symbole, Stopp-Feld, Weg) und Position pro Tick, kubisches Abbremsen über 270 Ticks, 50–64 Felder Weg. Gewinnfelder-Dichte nur Optik (8–45 %), bei Niete oft ein Gewinnfeld direkt daneben
+- Pixelweises Laufen: Scroll-Pane ohne Scrollbalken schneidet ab, das erste Slot-Feld bekommt einen negativen `left_margin` (Vanilla nutzt negative Ränder selbst)
+- `gamble.spin` zieht den Einsatz ab und würfelt, `gamble.finish` zahlt aus, wenn die Walze steht (`gui.tick` über `storage.spins`). Schließen mitten im Dreh zahlt sofort aus und meldet im Chat
+- Nach einem Mod-Update werden offene Fenster neu aufgebaut (`gui.reopen_all`)
+- Headless getestet: 2000 simulierte Drehs landen immer auf dem Ergebnisfeld, Dreh/Auszahlung mit nachgebautem Spieler. Ob das Abschneiden im Scroll-Pane wirklich so aussieht, zeigt erst der Test im Spiel

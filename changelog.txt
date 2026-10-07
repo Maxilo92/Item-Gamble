@@ -1,4 +1,17 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.5.0
+Date: 2026-10-07
+  Features:
+    - Reel animation. A row of fields rushes sideways and slows down until the result stops under
+      the arrow. Win fields show the target item in yellow, misses are empty. The reel moves pixel
+      by pixel, clicks softly as fields pass the arrow and plays a fanfare on a win.
+    - The result is decided before the reel starts; the reel only shows it. The prize is paid out
+      when the reel stops, so the inventory in the window does not give it away early.
+    - The spin state lives in the save, so saving mid-spin and multiplayer are safe.
+  Changes:
+    - While the reel spins, stake, target and the spin button are locked.
+    - Closing the window mid-spin pays out at once and posts the result in chat.
+---------------------------------------------------------------------------------------------------
 Version: 0.4.0
 Date: 2026-10-07
   Changes:

@@ -7,6 +7,7 @@
 -- Stacks derselben Sorte. Die Frische ist der Durchschnitt genau dieser Items.
 
 local values = require("scripts.values")
+local reel = require("scripts.reel")
 
 local gamble = {}
 
@@ -34,6 +35,7 @@ end
 function gamble.init()
   storage.players = storage.players or {}
   storage.rng = storage.rng or game.create_random_generator()
+  storage.spins = storage.spins or {}
   for player_index, data in pairs(storage.players) do
     migrate_stake_inventory(player_index, data)
     data.elems = nil
@@ -236,11 +238,12 @@ function gamble.evaluate(player, data)
   return state
 end
 
--- Dreht einmal. Der Einsatz ist immer weg, bei Gewinn gibt es das Ziel.
--- Das Ergebnis steht in data.last, bevor irgendetwas angezeigt wird.
+-- Startet einen Dreh. Der Einsatz ist sofort weg, das Ergebnis steht sofort fest
+-- und liegt in data.spin. Ausgezahlt wird erst in gamble.finish, wenn die Walze
+-- steht - sonst verriete das Inventar im Fenster den Gewinn vorher.
 function gamble.spin(player, data)
   local state = gamble.evaluate(player, data)
-  if not state.ok then
+  if not state.ok or data.spin then
     return state
   end
 
@@ -258,23 +261,42 @@ function gamble.spin(player, data)
   end
 
   local won = storage.rng() < state.chance
-  local result = {
+  data.last = nil
+  data.spin = {
     won = won,
     chance = state.chance,
     name = data.target.name,
     quality = data.target.quality,
     count = state.count,
     stake = state.stake,
+    start = game.tick,
+    reel = reel.plan(storage.rng, won, state.chance),
   }
-  if won then
+  storage.spins[player.index] = true
+  return state
+end
+
+-- Walze steht (oder der Dreh wird abgebrochen, z.B. beim Schließen): auszahlen.
+-- Gibt das Ergebnis zurück, nil wenn kein Dreh lief.
+function gamble.finish(player, data)
+  local result = data.spin
+  if not result then
+    return nil
+  end
+  data.spin = nil
+  storage.spins[player.index] = nil
+  if result.won then
     result.spilled = give(player, { name = result.name, quality = result.quality, count = result.count })
   end
+  result.reel_end = result.reel
+  result.reel = nil
   data.last = result
-  return state
+  return result
 end
 
 function gamble.remove_player(player_index)
   storage.players[player_index] = nil
+  storage.spins[player_index] = nil
 end
 
 return gamble
