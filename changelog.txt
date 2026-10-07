@@ -1,0 +1,48 @@
+---------------------------------------------------------------------------------------------------
+Version: 0.4.0
+Date: 2026-10-07
+  Changes:
+    - One window instead of two. Your inventory is shown inside the gamble window, so there is no
+      need to open the character screen and pick up a stack first. E and Esc close the window.
+    - Staking works like everywhere else in the game: left click an inventory slot stakes the whole
+      stack, right click stakes a single item. On the stake slot, left click takes everything back
+      and right click takes one item back.
+    - Staked items stay in your inventory until you spin. The grid shows what is left and
+      highlights the slots involved. Spinning takes from the clicked slots first; freshness is the
+      average of exactly the items that are taken.
+    - Items without a value and armor with equipment inside are greyed out in the grid, the
+      tooltip says why.
+  Bugfixes:
+    - Items still lying in the stake slot of 0.3.0 are given back when the save is loaded.
+---------------------------------------------------------------------------------------------------
+Version: 0.3.0
+Date: 2026-10-07
+  Features:
+    - Gamble window, opened from the shortcut bar or with ALT + G. Stake slot, target item with
+      quality and amount (one stack at most), live win chance with the reason when a spin is not
+      possible, and a spin button.
+    - Spinning below the minimum chance is blocked.
+    - The window remembers its position.
+---------------------------------------------------------------------------------------------------
+Version: 0.2.0
+Date: 2026-10-07
+  Features:
+    - Later items are worth more. Value = material value x (1 + weight x log10(1 + research time /
+      1000 s)), counting all research up to the recipe, its ingredients and the building it needs.
+    - Map setting "Value factor for game progress" (default 1.5, 0 turns it off). Changing it
+      recalculates all values right away.
+  Changes:
+    - Because of the progress factor, foundry casting no longer undercuts the Nauvis recipes.
+    - Pentapod eggs got a base value (the biochamber needs eggs, eggs need a biochamber).
+    - Biter egg and promethium chunk base values lowered to 165, so 1 red science for 100
+      promethium science stays close to the minimum chance.
+    - /gamble-values lists hidden items without a value only as a count.
+---------------------------------------------------------------------------------------------------
+Version: 0.1.0
+Date: 2026-10-07
+  Features:
+    - Item values calculated at load time from base values for raw resources and the cheapest
+      recipe for everything else, including items from other mods.
+    - Map settings for maximum and minimum win chance and the value factor per quality level.
+    - /gamble-values [search] writes every value to script-output/item-gamble/values.txt.
+    - /gamble-recalc recalculates the values (admins only).

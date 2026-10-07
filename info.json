@@ -1,0 +1,12 @@
+{
+  "name": "item-gamble",
+  "version": "0.4.0",
+  "title": "Item Gamble",
+  "author": "Pries",
+  "factorio_version": "2.0",
+  "description": "Setze ein Item ein, wähle ein Ziel und lass das Glücksrad entscheiden.",
+  "dependencies": [
+    "base >= 2.0.0",
+    "space-age >= 2.0.0"
+  ]
+}

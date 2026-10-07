@@ -1,0 +1,38 @@
+data:extend({
+  {
+    type = "double-setting",
+    name = "item-gamble-max-chance",
+    setting_type = "runtime-global",
+    default_value = 0.75,
+    minimum_value = 0.0001,
+    maximum_value = 1,
+    order = "a",
+  },
+  {
+    type = "double-setting",
+    name = "item-gamble-min-chance",
+    setting_type = "runtime-global",
+    default_value = 0.00001,
+    minimum_value = 0,
+    maximum_value = 1,
+    order = "b",
+  },
+  {
+    type = "double-setting",
+    name = "item-gamble-quality-multiplier",
+    setting_type = "runtime-global",
+    default_value = 2,
+    minimum_value = 1,
+    maximum_value = 100,
+    order = "c",
+  },
+  {
+    type = "double-setting",
+    name = "item-gamble-progression-weight",
+    setting_type = "runtime-global",
+    default_value = 1.5,
+    minimum_value = 0,
+    maximum_value = 10,
+    order = "d",
+  },
+})
