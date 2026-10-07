@@ -113,3 +113,13 @@ User-Feedback zu 0.3.0: zwei Fenster (eigenes + Inventar) sind eins zu viel, und
 - `gamble.spin` zieht den Einsatz ab und würfelt, `gamble.finish` zahlt aus, wenn die Walze steht (`gui.tick` über `storage.spins`). Schließen mitten im Dreh zahlt sofort aus und meldet im Chat
 - Nach einem Mod-Update werden offene Fenster neu aufgebaut (`gui.reopen_all`)
 - Headless getestet: 2000 simulierte Drehs landen immer auf dem Ergebnisfeld, Dreh/Auszahlung mit nachgebautem Spieler. Ob das Abschneiden im Scroll-Pane wirklich so aussieht, zeigt erst der Test im Spiel
+
+### 0.6.0: Bedienung wie Kiste, Zielwahl wie Kombinator
+
+User-Feedback zu 0.5.0: Walze soll ganzzahlig bzw. in die nächste Feldmitte fallen; das Möchtegern-Inventar ist Mist, es soll wie eine Kiste/ein Gebäude eine Erweiterung des Inventars sein; Zielwahl wie beim Konstanten Kombinator mit Menge in der Auswahl; im Editor mit angehaltener Zeit friert alles ein; Gewinnfelder sollen gleichmäßigen Abstand haben.
+
+- Einsatz = `game.create_inventory(1, titel)` pro Spieler, geöffnet über `player.opened`. Factorio zeigt das eigene Inventar daneben, Vanilla-Bedienung komplett. Das Panel hängt als `player.gui.relative` mit Anker `script_inventory_gui` rechts daran. Schließen (E/Esc/ALT+G) gibt den Einsatz zurück
+- Refresh über `on_player_main_inventory_changed` + `on_player_cursor_stack_changed` (jede Vanilla-Bewegung ändert eins davon)
+- Zielauswahl: eigenes Fenster mit Gruppen-Tabs (`image_tab_slot`), Item-Raster je Untergruppe (`filter_slot_table`), Qualitätsknöpfe, Mengenfeld, Übernehmen (auch Doppelklick/Enter). Keine Suche: ein Mod kann nur interne Namen durchsuchen, deutsche Begriffe würden nichts finden
+- Walze: Gewinnfelder im festen Takt (`period` 2–5 je nach Chance, `phase`), Stopp exakt mittig, vorher bis 0,4 Felder daneben, dann 24 Frames Einrasten. Eigener Frame-Zähler statt Spieltick
+- `game.tick_paused`: Dreh wird sofort aufgelöst (ohne Ticks keine Animation möglich)

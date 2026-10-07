@@ -1,4 +1,21 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.6.0
+Date: 2026-10-07
+  Changes:
+    - The window works like a chest now: the stake is a real slot next to the vanilla inventory.
+      Left click, right click, shift click and splitting stacks all work as everywhere else. The
+      gamble panel is attached to the right of it. The home-made inventory grid is gone.
+    - Target selection works like the constant combinator: click the target slot, pick an item
+      from the item group tabs, choose quality and amount, then confirm (double click or Enter
+      confirm too).
+    - The reel always comes to rest exactly in the middle of a field. It stops slightly off, then
+      settles into the centre of the nearest field.
+    - Win fields on the reel are evenly spaced (every 2nd to 5th field, depending on the chance).
+  Bugfixes:
+    - With time paused (e.g. in the map editor) the reel no longer freezes the window; the spin is
+      resolved immediately instead, since nothing can move without ticks.
+    - The reel counts its own frames, so a save loaded mid-spin carries on where it left off.
+---------------------------------------------------------------------------------------------------
 Version: 0.5.0
 Date: 2026-10-07
   Features:
