@@ -150,3 +150,9 @@ User will genau den Vanilla-Dialog „Signal auswählen“ des Konstanten Kombin
 - Suche über übersetzte Namen: `scripts/translate.lua` (`request_translations`, `on_string_translated`, neu bei Sprachwechsel)
 - Ziel im Panel ist ein Slot: links Dialog, rechts leeren
 - Klick-Sound: genau beim Feldwechsel, still solange Felder schneller als alle 3 Frames wechseln (User: „nicht in sync“)
+
+### 0.8.1: Absturz-Fix
+
+- `horizontal_spacing` auf einem Rahmen → Absturz beim Öffnen der Zielauswahl. Abstände gibt es nur bei Flows/Tabellen
+- `tools/check_mod.py` prüft jetzt Style-Eigenschaften gegen den Element-Typ (Quelle: *StyleSpecification in prototype-api.json)
+- User fragte, ob man „Signal auswählen“ nicht einfach triggern kann: nein, die API kennt dafür keinen Aufruf (nur `open_factoriopedia_gui`, `open_technology_gui`, `opened`)

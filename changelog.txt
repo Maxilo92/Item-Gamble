@@ -1,4 +1,10 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.8.1
+Date: 2026-10-07
+  Bugfixes:
+    - Fixed a crash when opening the target selection ("Expected Table or Flow or HorizontalFlow
+      style type but was Frame").
+---------------------------------------------------------------------------------------------------
 Version: 0.8.0
 Date: 2026-10-07
   Changes:

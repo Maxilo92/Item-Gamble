@@ -552,11 +552,14 @@ local function open_picker(player, data)
     quality_buttons[quality.name] = button
   end
 
-  local count_frame = frame.add({ type = "frame", style = "inside_shallow_frame_with_padding", direction = "horizontal" })
+  local count_frame = frame.add({ type = "frame", style = "inside_shallow_frame_with_padding" })
   count_frame.style.top_margin = 8
-  count_frame.style.vertical_align = "center"
-  count_frame.style.horizontal_spacing = 8
-  local slider = count_frame.add({
+  -- Abstände gibt es nur bei Flows und Tabellen, nicht bei Rahmen
+  local count_row = count_frame.add({ type = "flow", direction = "horizontal" })
+  count_row.style.vertical_align = "center"
+  count_row.style.horizontal_spacing = 8
+  count_row.style.horizontally_stretchable = true
+  local slider = count_row.add({
     type = "slider",
     name = NAMES.picker_slider,
     minimum_value = 0,
@@ -565,7 +568,7 @@ local function open_picker(player, data)
     value_step = 1,
   })
   slider.style.horizontally_stretchable = true
-  local count = count_frame.add({
+  local count = count_row.add({
     type = "textfield",
     name = NAMES.picker_count,
     style = "slider_value_textfield",
@@ -575,7 +578,7 @@ local function open_picker(player, data)
     lose_focus_on_confirm = true,
     tooltip = { "item-gamble.count-tooltip" },
   })
-  local confirm = count_frame.add({
+  local confirm = count_row.add({
     type = "sprite-button",
     name = NAMES.picker_confirm,
     style = "item_and_count_select_confirm",
