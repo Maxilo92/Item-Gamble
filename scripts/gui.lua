@@ -211,7 +211,6 @@ local function build_window(player, data)
   for i = 1, gamble.OUTPUT_SLOTS do
     output_buttons[i] = output_table.add({
       type = "sprite-button",
-      name = NAMES.output,
       style = "inventory_slot",
       tags = { [TAGS.output] = i },
       tooltip = { "item-gamble.output-tooltip" },
@@ -903,7 +902,7 @@ local function on_click(event)
   elseif name == NAMES.stake then
     gamble.click_slot(player, data.stake_inventory[1], event, true)
     gui.refresh(player)
-  elseif name == NAMES.output then
+  elseif tags[TAGS.output] then
     gamble.click_slot(player, data.output_inventory[tags[TAGS.output]], event, false)
     gui.refresh(player)
   elseif name == NAMES.spin then

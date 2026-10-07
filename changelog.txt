@@ -1,4 +1,10 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.13.2
+Date: 2026-10-07
+  Changes:
+    - Fixed the window failing to open in 0.13.0 and 0.13.1: the ten prize slots shared one element
+      name, which Factorio does not allow among siblings. They are told apart by tags now.
+---------------------------------------------------------------------------------------------------
 Version: 0.13.1
 Date: 2026-10-07
   Changes:
