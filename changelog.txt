@@ -1,4 +1,10 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.17.0
+Date: 2026-10-07
+  Changes:
+    - The prize area only grows when a prize actually lands in it, by exactly the rows it needs.
+      It never keeps empty rows: taken-out gaps close up and empty rows disappear.
+---------------------------------------------------------------------------------------------------
 Version: 0.16.0
 Date: 2026-10-07
   Changes:

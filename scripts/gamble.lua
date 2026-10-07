@@ -90,32 +90,37 @@ function gamble.get(player_index)
   return data
 end
 
--- Gewinn-Bereich an den möglichen Gewinn anpassen: belegte Slots + Stacks für den
--- Gewinn + ein Platz für einen Trostpreis, auf volle Reihen aufgerundet. resize löscht
--- Items hinter der neuen Größe, deshalb schrumpft er nur über leere Slots am Ende.
--- Während eines Drehs bleibt er, wie er ist: der Gewinn steht noch aus.
--- Gibt true zurück, wenn sich die Größe geändert hat.
-function gamble.fit_output(data, state)
-  local output = data.output_inventory
-  if data.spin then
-    return false
-  end
-  local last = 0
-  for i = #output, 1, -1 do
-    if output[i].valid_for_read then
-      last = i
-      break
-    end
-  end
-  local wanted = last + 1
-  if data.target and state.count then
-    local stack_size = prototypes.item[data.target.name].stack_size
-    wanted = wanted + math.ceil(state.count * (state.multi or 1) / stack_size)
+-- Vor dem Auszahlen: so viele Reihen anhängen, wie der Gewinn über den freien Platz
+-- hinaus braucht (höchstens bis MAX_OUTPUT_SLOTS, der Rest geht ins Inventar).
+local function grow_output(output, stack)
+  local missing = stack.count - output.get_insertable_count({ name = stack.name, quality = stack.quality })
+  if missing <= 0 then
+    return
   end
   local columns = gamble.OUTPUT_COLUMNS
-  local size = math.ceil(wanted / columns) * columns
-  size = math.max(columns, math.min(gamble.MAX_OUTPUT_SLOTS, size))
-  size = math.max(size, math.ceil(last / columns) * columns)
+  local slots = math.ceil(missing / prototypes.item[stack.name].stack_size)
+  local size = math.ceil((#output + slots) / columns) * columns
+  output.resize(math.min(gamble.MAX_OUTPUT_SLOTS, size))
+end
+
+-- Gewinn-Bereich so groß wie sein Inhalt: Lücken rücken nach vorne (Reihenfolge
+-- bleibt), dann genau so viele Reihen wie belegt, mindestens eine. Wachsen tut er beim
+-- Auszahlen (grow_output). resize löscht Items hinter der neuen Größe - nach dem
+-- Aufrücken liegt dort nichts mehr.
+-- Gibt true zurück, wenn sich die Größe geändert hat.
+function gamble.fit_output(data)
+  local output = data.output_inventory
+  local used = 0
+  for i = 1, #output do
+    if output[i].valid_for_read then
+      used = used + 1
+      if used < i then
+        output[used].swap_stack(output[i])
+      end
+    end
+  end
+  local columns = gamble.OUTPUT_COLUMNS
+  local size = math.max(columns, math.ceil(used / columns) * columns)
   if size == #output then
     return false
   end
@@ -283,7 +288,9 @@ end
 -- Slot mehr frei ist und kein Stapel des Ziels Platz hat - wie eine Maschine mit
 -- voller Ausgabe. Was beim Gewinn nicht mehr hineinpasst, geht ins Inventar.
 local function output_accepts(data, target)
-  return data.output_inventory.can_insert({ name = target.name, quality = target.quality, count = 1 })
+  local output = data.output_inventory
+  return #output < gamble.MAX_OUTPUT_SLOTS
+    or output.can_insert({ name = target.name, quality = target.quality, count = 1 })
 end
 
 -- Alles, was das Fenster anzeigt und der Dreh braucht.
@@ -413,6 +420,7 @@ function gamble.finish(player, data)
   -- Schließen, viele Drehs), ins Inventar, der Rest auf den Boden
   local function pay(paid)
     local stack = { name = paid.name, quality = paid.quality, count = paid.count }
+    grow_output(data.output_inventory, stack)
     local inserted = data.output_inventory.insert(stack)
     if inserted < stack.count then
       stack.count = stack.count - inserted

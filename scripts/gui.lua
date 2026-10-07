@@ -266,7 +266,7 @@ local function build_window(player, data)
   result.style.single_line = false
   result.style.maximal_width = reel.VISIBLE * reel.PITCH
 
-  -- Gewinn-Bereich: Reihen so breit wie die Walze, so viele wie der Gewinn braucht
+  -- Gewinn-Bereich: Reihen so breit wie die Walze, so viele wie belegt sind
   -- (gamble.fit_output). Erst ab OUTPUT_ROWS Reihen wird gescrollt.
   local output_scroll = reel_box.add({
     type = "scroll-pane",
@@ -515,7 +515,7 @@ function gui.refresh(player, typing)
   gamble.track_stake(data)
   show_stack(elems.stake, data.stake_inventory[1])
   local state = gamble.evaluate(data)
-  if gamble.fit_output(data, state) then
+  if gamble.fit_output(data) then
     state = gamble.evaluate(data)
   end
   refresh_output(data, elems)

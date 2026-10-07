@@ -220,6 +220,13 @@ User zu 0.15.0: jetzt zu wenig Text, Einsatz- und Zielfeld unklar; der Multiplik
 - Beschriftungen Einsatz/Ziel zurück, Spalte mit „× 5 = 500“, Hinweise bei leerem Einsatz/Ziel (normal statt rot) über der Walze, Tooltips erklären wieder kurz
 - `gamble.fit_output`: Gewinn-Inventar per `resize` auf belegte Slots + Gewinn-Stacks + 1, auf Reihen à 10 gerundet, max. 200. Schrumpft nur über leere Slots am Ende (resize löscht Items dahinter), nicht während eines Drehs. GUI baut die Gewinn-Slots neu, wenn sich die Größe ändert; ab 8 Reihen Scroll
 
+### 0.17.0: Gewinn-Bereich ohne Luft
+
+User: Gewinn-Slots sollen mit den tatsächlichen Gewinnen wachsen, bei Niete nichts erweitern, nie Luft.
+
+- `gamble.fit_output(data)`: Lücken rücken nach vorne (`swap_stack`, Reihenfolge bleibt), Größe = belegte Reihen, mindestens eine. `grow_output` in `finish` hängt vor dem Auszahlen genau die fehlenden Reihen an (`get_insertable_count`), bis 200; `output-blocked` nur noch bei 200 voll
+- Offen: User fand den Screenshot-Gewinn „zu op“ (1 Promethium 3290 → 40 kalte Fluoroketon-Fässer à 118, 54,8 %, ×20 = 800 Fässer). Nachgefragt, was genau
+
 ### Arbeitsweise Cloud vs. lokal
 
 - In der Cloud gibt es kein Factorio. Der Push erreicht den lokalen Mod-Ordner (Junction) nur nach `git pull`, danach Factorio komplett neu starten (neue Einstellungen!) und `/gamble-recalc`
