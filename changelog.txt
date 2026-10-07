@@ -1,4 +1,11 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.13.3
+Date: 2026-10-07
+  Changes:
+    - "Spins" is called "Multiplier" now.
+    - Shift + right click on the stake and prize slots moves half of the stack to your inventory,
+      like in the vanilla inventory.
+---------------------------------------------------------------------------------------------------
 Version: 0.13.2
 Date: 2026-10-07
   Changes:

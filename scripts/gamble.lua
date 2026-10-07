@@ -152,8 +152,16 @@ function gamble.click_slot(player, slot, event, accepts_input)
   local right = event.button == defines.mouse_button_type.right
 
   if event.shift then
-    if slot.valid_for_read then
-      local inserted = player.get_main_inventory() and player.get_main_inventory().insert(slot) or 0
+    -- Wie im Spiel: Shift ins Inventar, Shift + Rechtsklick nur den halben Stack
+    local inventory = player.get_main_inventory()
+    if slot.valid_for_read and inventory then
+      local count = right and math.ceil(slot.count / 2) or slot.count
+      local inserted
+      if count >= slot.count then
+        inserted = inventory.insert(slot)
+      else
+        inserted = inventory.insert({ name = slot.name, quality = slot.quality, count = count })
+      end
       if inserted >= slot.count then
         slot.clear()
       elseif inserted > 0 then
