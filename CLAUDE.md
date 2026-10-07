@@ -67,6 +67,8 @@ Ergebnis wird **vor** der Animation festgelegt, die Animation ist nur Show. Zust
 - 2.0 nutzt das globale `prototypes` (nicht mehr `game.item_prototypes`) und `storage` (nicht mehr `global`)
 - API vor Benutzung gegen https://lua-api.factorio.com/latest/ prüfen, nicht aus dem Gedächtnis raten
 - Mod-Ordner unter Windows: `%APPDATA%\Factorio\mods\`
+- **Versionierung (User-Wunsch):** Jeder Stand, den der User testet, bekommt eine neue Version in `info.json`, einen Eintrag in `changelog.txt` (englisch, Factorio-Format wie bei kamikaze-robot) und einen Git-Commit „Version x.y.z“ mit Tag `vx.y.z`. Nie eine Versionsnummer wiederverwenden
+- Installiert ist die Mod per Junction `%APPDATA%\Factorio\mods\item-gamble` → dieser Ordner
 - Claude Code kann das Spiel nicht spielen, aber headless testen (eigene config.ini mit eigenem write-data, `--create` + `--benchmark`): Wertberechnung und Bericht laufen so ohne Spieler. GUI und Chat-Befehle testet der User im Spiel und schickt Fehler bzw. `factorio-current.log` zurück.
 
 ## Reihenfolge
