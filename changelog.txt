@@ -1,4 +1,11 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.6.1
+Date: 2026-10-07
+  Changes:
+    - The target is chosen with the vanilla item selector again (item groups, quality and a search
+      that finds translated names), with the amount field right next to it. The home-made target
+      window from 0.6.0 is gone.
+---------------------------------------------------------------------------------------------------
 Version: 0.6.0
 Date: 2026-10-07
   Changes:

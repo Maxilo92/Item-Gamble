@@ -123,3 +123,10 @@ User-Feedback zu 0.5.0: Walze soll ganzzahlig bzw. in die nächste Feldmitte fal
 - Zielauswahl: eigenes Fenster mit Gruppen-Tabs (`image_tab_slot`), Item-Raster je Untergruppe (`filter_slot_table`), Qualitätsknöpfe, Mengenfeld, Übernehmen (auch Doppelklick/Enter). Keine Suche: ein Mod kann nur interne Namen durchsuchen, deutsche Begriffe würden nichts finden
 - Walze: Gewinnfelder im festen Takt (`period` 2–5 je nach Chance, `phase`), Stopp exakt mittig, vorher bis 0,4 Felder daneben, dann 24 Frames Einrasten. Eigener Frame-Zähler statt Spieltick
 - `game.tick_paused`: Dreh wird sofort aufgelöst (ohne Ticks keine Animation möglich)
+
+### 0.6.1: Vanilla recyceln statt nachbauen
+
+User: kein Gebäude zum Gamblen (zumindest noch nicht), aber so viel Vanilla wiederverwenden wie möglich; die eigene Zielauswahl sah trotz Kombinator-Optik selbstgemacht aus.
+
+- Zielwahl wieder über `choose-elem-button` (`item-with-quality`): das ist der echte Vanilla-Auswähler, inkl. Suche über übersetzte Namen. Menge im Textfeld direkt daneben
+- Menge im selben Dialog wie beim Kombinator gibt es nur für Entitäten (Anforderungs-/Kombinator-Slots); ohne Gebäude nicht möglich. Falls später doch ein „Glücksautomat“ kommt: `logistic-container` (requester) mit `inventory_size = 1`, `max_logistic_slots = 1` liefert Einsatz-Slot und Kombinator-Dialog komplett Vanilla, Anforderungen per `LuaLogisticPoint.enabled = false` abschalten

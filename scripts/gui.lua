@@ -1,8 +1,8 @@
 -- Fenster wie bei einer Kiste: Geöffnet wird das 1-Slot-Einsatzinventar, Factorio
 -- zeigt daneben das eigene Inventar mit der gewohnten Bedienung. Rechts daran hängt
 -- das Glücksspiel-Panel (relative GUI): Ziel, Chance, Walze, Drehen.
--- Das Ziel wird in einer eigenen Auswahl gewählt, ähnlich dem Konstanten Kombinator:
--- Gruppen-Tabs, Items, Qualität und Menge, dann Übernehmen.
+-- Das Ziel wählt man im Vanilla-Item-Auswähler (choose-elem-button mit Qualität,
+-- inklusive Suche über die übersetzten Namen), die Menge im Feld daneben.
 --
 -- Die Walze ist ein Scroll-Bereich ohne Scrollbalken, der überstehende Felder
 -- abschneidet. Darin liegt eine Reihe Slots; das erste bekommt einen negativen
@@ -16,19 +16,10 @@ local reel = require("scripts.reel")
 local gui = {}
 
 local PANEL = "item_gamble_panel"
-local PICKER = "item_gamble_picker"
-local COLUMNS = 10
 local NAMES = {
   target = "item_gamble_target",
+  count = "item_gamble_count",
   spin = "item_gamble_spin",
-  picker_close = "item_gamble_picker_close",
-  picker_confirm = "item_gamble_picker_confirm",
-  picker_count = "item_gamble_picker_count",
-}
-local TAGS = {
-  group = "item_gamble_group",
-  item = "item_gamble_item",
-  quality = "item_gamble_quality",
 }
 
 local PROBLEM_KEYS = {
@@ -82,6 +73,16 @@ end
 
 -- ── Panel ───────────────────────────────────────────────────────────────────
 
+local function selectable_names()
+  local names = {}
+  for name in pairs(prototypes.item) do
+    if values.is_selectable(name) then
+      names[#names + 1] = name
+    end
+  end
+  return names
+end
+
 local function build_panel(player, data)
   local panel = player.gui.relative.add({
     type = "frame",
@@ -110,11 +111,34 @@ local function build_panel(player, data)
   target_row.style.horizontal_spacing = 8
   target_row.add({ type = "label", style = "caption_label", caption = { "item-gamble.target" } })
   local target = target_row.add({
-    type = "sprite-button",
+    type = "choose-elem-button",
     name = NAMES.target,
-    style = "inventory_slot",
+    elem_type = "item-with-quality",
     tooltip = { "item-gamble.target-tooltip" },
   })
+  -- Nur Items mit Wert anbieten. Der name-Filter ist laut Doku für verschachtelte
+  -- Filter gedacht; falls er hier nicht greift, bleibt die Prüfung beim Auswählen.
+  local filtered = pcall(function()
+    target.elem_filters = { { filter = "name", name = selectable_names() } }
+  end)
+  if not filtered then
+    target.elem_filters = { { filter = "hidden", invert = true } }
+  end
+  if data.target then
+    target.elem_value = { name = data.target.name, quality = data.target.quality }
+  end
+  local count = target_row.add({
+    type = "textfield",
+    name = NAMES.count,
+    text = tostring(data.count or 1),
+    numeric = true,
+    allow_decimal = false,
+    allow_negative = false,
+    lose_focus_on_confirm = true,
+    tooltip = { "item-gamble.count-tooltip" },
+  })
+  count.style.width = 64
+  local max_count = target_row.add({ type = "label" })
   local target_value = target_row.add({ type = "label" })
 
   content.add({ type = "line" })
@@ -170,6 +194,8 @@ local function build_panel(player, data)
     panel = panel,
     stake_value = stake_value,
     target = target,
+    count = count,
+    max_count = max_count,
     target_value = target_value,
     chance = chance,
     reel_slots = reel_slots,
@@ -258,19 +284,9 @@ function gui.refresh(player)
     elems.stake_value.caption = ""
   end
 
-  local target = elems.target
-  if data.target then
-    target.sprite = "item/" .. data.target.name
-    target.quality = data.target.quality
-    target.number = state.count
-    target.elem_tooltip = { type = "item-with-quality", name = data.target.name, quality = data.target.quality }
-  else
-    target.sprite = ""
-    target.quality = nil
-    target.number = nil
-    target.elem_tooltip = nil
-  end
-  target.enabled = not spinning
+  elems.target.enabled = not spinning
+  elems.count.enabled = not spinning
+  elems.max_count.caption = state.max_count and { "item-gamble.max-count", state.max_count } or ""
   elems.target_value.caption = state.target_value and { "item-gamble.value", format_number(state.target_value) } or ""
 
   if spinning then
@@ -308,242 +324,6 @@ function gui.refresh_all()
   end
 end
 
--- ── Zielauswahl ─────────────────────────────────────────────────────────────
-
--- Items mit Wert, nach Gruppe und Untergruppe sortiert wie im Spiel
-local function selectable_groups()
-  local by_group = {}
-  for name, item in pairs(prototypes.item) do
-    if values.is_selectable(name) then
-      local group, subgroup = item.group, item.subgroup
-      local entry = by_group[group.name]
-      if not entry then
-        entry = { name = group.name, order = group.order, subgroups = {} }
-        by_group[group.name] = entry
-      end
-      local sub = entry.subgroups[subgroup.name]
-      if not sub then
-        sub = { order = subgroup.order, items = {} }
-        entry.subgroups[subgroup.name] = sub
-      end
-      sub.items[#sub.items + 1] = { name = name, order = item.order }
-    end
-  end
-  local groups = {}
-  for _, entry in pairs(by_group) do
-    local subgroups = {}
-    for _, sub in pairs(entry.subgroups) do
-      table.sort(sub.items, function(a, b) return a.order < b.order or (a.order == b.order and a.name < b.name) end)
-      subgroups[#subgroups + 1] = sub
-    end
-    table.sort(subgroups, function(a, b) return a.order < b.order end)
-    entry.subgroups = subgroups
-    groups[#groups + 1] = entry
-  end
-  table.sort(groups, function(a, b) return a.order < b.order or (a.order == b.order and a.name < b.name) end)
-  return groups
-end
-
-local function picker_qualities()
-  local list = {}
-  for name, quality in pairs(prototypes.quality) do
-    if not quality.hidden then
-      list[#list + 1] = { name = name, level = quality.level, order = quality.order }
-    end
-  end
-  table.sort(list, function(a, b) return a.level < b.level or (a.level == b.level and a.order < b.order) end)
-  return list
-end
-
-local function fill_picker_items(data)
-  local pick = data.picker
-  local elems = pick.elems
-  local list = elems.items
-  list.clear()
-  elems.item_buttons = {}
-  local group
-  for _, entry in ipairs(pick.groups) do
-    if entry.name == pick.group then
-      group = entry
-    end
-  end
-  if not group then
-    return
-  end
-  for _, sub in ipairs(group.subgroups) do
-    local table_element = list.add({ type = "table", style = "filter_slot_table", column_count = COLUMNS })
-    for _, item in ipairs(sub.items) do
-      local button = table_element.add({
-        type = "sprite-button",
-        style = item.name == pick.item and "yellow_slot_button" or "slot_button",
-        sprite = "item/" .. item.name,
-        quality = pick.quality,
-        elem_tooltip = { type = "item-with-quality", name = item.name, quality = pick.quality },
-        tags = { [TAGS.item] = item.name },
-      })
-      elems.item_buttons[item.name] = button
-    end
-  end
-  for name, button in pairs(elems.group_buttons) do
-    button.style = name == pick.group and "image_tab_selected_slot" or "image_tab_slot"
-  end
-end
-
-local function refresh_picker(data)
-  local pick = data.picker
-  local elems = pick.elems
-  for name, button in pairs(elems.quality_buttons) do
-    button.style = name == pick.quality and "yellow_slot_button" or "slot_button"
-  end
-  for name, button in pairs(elems.item_buttons) do
-    button.quality = pick.quality
-    button.elem_tooltip = { type = "item-with-quality", name = name, quality = pick.quality }
-  end
-  local stack_size = pick.item and prototypes.item[pick.item].stack_size
-  elems.max_count.caption = stack_size and { "item-gamble.max-count", stack_size } or ""
-  elems.confirm.enabled = pick.item ~= nil
-end
-
-local function close_picker(player, data)
-  local frame = player.gui.screen[PICKER]
-  if frame then
-    frame.destroy()
-  end
-  if data then
-    data.picker = nil
-  end
-end
-
-local function open_picker(player, data)
-  close_picker(player, data)
-  local groups = selectable_groups()
-  local current = data.target
-  local start_group = groups[1] and groups[1].name
-  if current then
-    start_group = prototypes.item[current.name].group.name
-  end
-  local pick = {
-    groups = groups,
-    group = start_group,
-    item = current and current.name,
-    quality = current and current.quality or "normal",
-  }
-  data.picker = pick
-
-  local frame = player.gui.screen.add({ type = "frame", name = PICKER, direction = "vertical" })
-  frame.auto_center = true
-  local titlebar = frame.add({ type = "flow", direction = "horizontal" })
-  titlebar.drag_target = frame
-  titlebar.style.horizontal_spacing = 8
-  titlebar.add({ type = "label", style = "frame_title", caption = { "item-gamble.picker-title" }, ignored_by_interaction = true })
-  local drag = titlebar.add({ type = "empty-widget", style = "draggable_space_header", ignored_by_interaction = true })
-  drag.style.horizontally_stretchable = true
-  drag.style.height = 24
-  drag.style.right_margin = 4
-  titlebar.add({
-    type = "sprite-button",
-    name = NAMES.picker_close,
-    style = "frame_action_button",
-    sprite = "utility/close",
-    tooltip = { "gui.close" },
-  })
-
-  local content = frame.add({ type = "frame", style = "inside_deep_frame", direction = "vertical" })
-  local group_table = content.add({ type = "table", column_count = 6 })
-  group_table.style.horizontal_spacing = 0
-  group_table.style.vertical_spacing = 0
-  local group_buttons = {}
-  for _, entry in ipairs(groups) do
-    group_buttons[entry.name] = group_table.add({
-      type = "sprite-button",
-      style = "image_tab_slot",
-      sprite = "item-group/" .. entry.name,
-      tooltip = prototypes.item_group[entry.name].localised_name,
-      tags = { [TAGS.group] = entry.name },
-    })
-  end
-
-  local scroll = content.add({ type = "scroll-pane", style = "deep_scroll_pane", horizontal_scroll_policy = "never" })
-  scroll.style.width = COLUMNS * 40 + 12
-  scroll.style.height = 40 * 8
-  local items = scroll.add({ type = "flow", direction = "vertical" })
-  items.style.vertical_spacing = 0
-
-  local settings_frame = frame.add({
-    type = "frame",
-    style = "inside_shallow_frame_with_padding_and_vertical_spacing",
-    direction = "vertical",
-  })
-  settings_frame.style.top_margin = 8
-  local quality_row = settings_frame.add({ type = "flow", direction = "horizontal" })
-  quality_row.style.vertical_align = "center"
-  quality_row.add({ type = "label", style = "caption_label", caption = { "item-gamble.picker-quality" } })
-  local quality_buttons = {}
-  for _, quality in ipairs(picker_qualities()) do
-    quality_buttons[quality.name] = quality_row.add({
-      type = "sprite-button",
-      style = "slot_button",
-      sprite = "quality/" .. quality.name,
-      tooltip = prototypes.quality[quality.name].localised_name,
-      tags = { [TAGS.quality] = quality.name },
-    })
-  end
-  local count_row = settings_frame.add({ type = "flow", direction = "horizontal" })
-  count_row.style.vertical_align = "center"
-  count_row.add({ type = "label", style = "caption_label", caption = { "item-gamble.picker-count" } })
-  local count = count_row.add({
-    type = "textfield",
-    name = NAMES.picker_count,
-    text = tostring(data.count or 1),
-    numeric = true,
-    allow_decimal = false,
-    allow_negative = false,
-    lose_focus_on_confirm = true,
-    tooltip = { "item-gamble.count-tooltip" },
-  })
-  count.style.width = 80
-  local max_count = count_row.add({ type = "label" })
-
-  local buttons = frame.add({ type = "flow", style = "dialog_buttons_horizontal_flow" })
-  local filler = buttons.add({ type = "empty-widget", style = "draggable_space", ignored_by_interaction = true })
-  filler.style.horizontally_stretchable = true
-  filler.style.height = 32
-  filler.drag_target = frame
-  local confirm = buttons.add({
-    type = "button",
-    name = NAMES.picker_confirm,
-    style = "confirm_button",
-    caption = { "item-gamble.picker-confirm" },
-  })
-
-  pick.elems = {
-    frame = frame,
-    items = items,
-    group_buttons = group_buttons,
-    item_buttons = {},
-    quality_buttons = quality_buttons,
-    count = count,
-    max_count = max_count,
-    confirm = confirm,
-  }
-  fill_picker_items(data)
-  refresh_picker(data)
-  frame.bring_to_front()
-end
-
-local function confirm_picker(player, data)
-  local pick = data.picker
-  if not (pick and pick.item) then
-    return
-  end
-  local stack_size = prototypes.item[pick.item].stack_size
-  data.target = { name = pick.item, quality = pick.quality }
-  data.count = math.max(1, math.min(math.floor(tonumber(pick.elems.count.text) or 1), stack_size))
-  data.last = nil
-  close_picker(player, data)
-  gui.refresh(player)
-end
-
 -- ── Öffnen, Schließen ───────────────────────────────────────────────────────
 
 local function announce(player, result)
@@ -576,7 +356,6 @@ local function cleanup(player)
     data.elems = nil
     data.last = nil
   end
-  close_picker(player, data)
   local panel = player.gui.relative[PANEL]
   if panel then
     panel.destroy()
@@ -608,51 +387,63 @@ local function on_click(event)
   if not (element and element.valid and element.get_mod() == script.mod_name) then
     return
   end
+  if element.name ~= NAMES.spin then
+    return
+  end
   local player = game.get_player(event.player_index)
   local data = gamble.get(player.index)
-  local tags = element.tags
-
-  if element.name == NAMES.target then
-    if not data.spin then
-      open_picker(player, data)
+  gamble.spin(player, data)
+  -- Angehaltene Zeit (z.B. im Editor): ohne Ticks keine Animation, gleich auflösen
+  if data.spin and game.tick_paused then
+    local result = gamble.finish(player, data)
+    if result.won then
+      player.play_sound({ path = "utility/achievement_unlocked" })
     end
-  elseif element.name == NAMES.spin then
-    gamble.spin(player, data)
-    -- Angehaltene Zeit (z.B. im Editor): ohne Ticks keine Animation, gleich auflösen
-    if data.spin and game.tick_paused then
-      local result = gamble.finish(player, data)
-      if result.won then
-        player.play_sound({ path = "utility/achievement_unlocked" })
-      end
-    end
-    gui.refresh(player)
-  elseif element.name == NAMES.picker_close then
-    close_picker(player, data)
-  elseif element.name == NAMES.picker_confirm then
-    confirm_picker(player, data)
-  elseif data.picker and tags[TAGS.group] then
-    data.picker.group = tags[TAGS.group]
-    fill_picker_items(data)
-    refresh_picker(data)
-  elseif data.picker and tags[TAGS.item] then
-    local pick = data.picker
-    local old = pick.item and pick.elems.item_buttons[pick.item]
-    if old and old.valid then
-      old.style = "slot_button"
-    end
-    -- Doppelklick wie im Spiel: gleich übernehmen
-    local double = pick.item == tags[TAGS.item] and event.tick - (pick.click_tick or -100) <= 20
-    pick.item = tags[TAGS.item]
-    pick.click_tick = event.tick
-    element.style = "yellow_slot_button"
-    refresh_picker(data)
-    if double then
-      confirm_picker(player, data)
-    end
-  elseif data.picker and tags[TAGS.quality] then
-    data.picker.quality = tags[TAGS.quality]
-    refresh_picker(data)
   end
+  gui.refresh(player)
+end
+
+local function on_elem_changed(event)
+  local element = event.element
+  if not (element and element.valid and element.name == NAMES.target) then
+    return
+  end
+  local player = game.get_player(event.player_index)
+  local data = gamble.get(player.index)
+  local value = element.elem_value
+  if data.spin then
+    element.elem_value = data.target and { name = data.target.name, quality = data.target.quality } or nil
+    return
+  end
+  if not value then
+    data.target = nil
+  elseif values.is_selectable(value.name) then
+    data.target = { name = value.name, quality = gamble.quality_name(value.quality) }
+    local stack_size = prototypes.item[value.name].stack_size
+    if (data.count or 1) > stack_size then
+      data.count = stack_size
+      data.elems.count.text = tostring(stack_size)
+    end
+  else
+    player.create_local_flying_text({
+      text = { PROBLEM_KEYS["target-no-value"], rich_item(value.name, gamble.quality_name(value.quality)) },
+      create_at_cursor = true,
+    })
+    element.elem_value = nil
+    data.target = nil
+  end
+  data.last = nil
+  gui.refresh(player)
+end
+
+local function on_text_changed(event)
+  local element = event.element
+  if not (element and element.valid and element.name == NAMES.count) then
+    return
+  end
+  local player = game.get_player(event.player_index)
+  gamble.get(player.index).count = tonumber(element.text) or 1
+  gui.refresh(player)
 end
 
 local function on_closed(event)
@@ -664,13 +455,18 @@ local function on_closed(event)
   end
 end
 
--- Enter im Mengenfeld übernimmt die Auswahl
+-- Enter oder Fokusverlust: Mengenfeld auf den gültigen Bereich zurücksetzen
 local function on_confirmed(event)
   local element = event.element
-  if element and element.valid and element.name == NAMES.picker_count then
-    local player = game.get_player(event.player_index)
-    confirm_picker(player, gamble.get(player.index))
+  if not (element and element.valid and element.name == NAMES.count) then
+    return
   end
+  local player = game.get_player(event.player_index)
+  local data = gamble.get(player.index)
+  local count = gamble.evaluate(data).count or math.max(1, math.floor(tonumber(element.text) or 1))
+  data.count = count
+  element.text = tostring(count)
+  gui.refresh(player)
 end
 
 -- Jeden Tick: laufende Walzen bewegen, fertige auszahlen. Gezählt werden eigene
@@ -730,7 +526,8 @@ function gui.reopen_all()
     if panel then
       panel.destroy()
     end
-    local picker = player.gui.screen[PICKER]
+    -- Eigene Zielauswahl aus 0.6.0
+    local picker = player.gui.screen["item_gamble_picker"]
     if picker then
       picker.destroy()
     end
@@ -750,6 +547,8 @@ function gui.register_events()
   script.on_event(defines.events.on_tick, gui.tick)
   script.on_event(defines.events.on_gui_click, on_click)
   script.on_event(defines.events.on_gui_closed, on_closed)
+  script.on_event(defines.events.on_gui_elem_changed, on_elem_changed)
+  script.on_event(defines.events.on_gui_text_changed, on_text_changed)
   script.on_event(defines.events.on_gui_confirmed, on_confirmed)
   script.on_event(defines.events.on_player_main_inventory_changed, on_inventory_event)
   script.on_event(defines.events.on_player_cursor_stack_changed, on_inventory_event)
