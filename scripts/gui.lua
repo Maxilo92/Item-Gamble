@@ -206,7 +206,7 @@ local function build_window(player, data)
   local output_label = output_row.add({ type = "label", style = "caption_label", caption = { "item-gamble.output" } })
   output_label.style.minimal_width = 56
   local output_frame = output_row.add({ type = "frame", style = "slot_button_deep_frame" })
-  local output_table = output_frame.add({ type = "table", style = "slot_table", column_count = gamble.OUTPUT_SLOTS // 2 })
+  local output_table = output_frame.add({ type = "table", style = "slot_table", column_count = math.floor(gamble.OUTPUT_SLOTS / 2) })
   local output_buttons = {}
   for i = 1, gamble.OUTPUT_SLOTS do
     output_buttons[i] = output_table.add({
