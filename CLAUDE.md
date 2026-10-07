@@ -265,6 +265,14 @@ User: „Multiplier sollen auf Freispin anwendbar sein“ → nachgefragt, gewä
 - Verworfene Alternative: Multiplikator beim Freispin frei wählbar, Rest aus dem Einsatz bezahlt
 - Gemessen: Rückfluss unverändert 52–57 %, ×1-Freispin bleibt ×1 nach Umstellen auf ×100
 
+### 0.23.0: Statistik, Freispins automatisch
+
+User wählte aus meiner Vorschlagsliste: Statistik (eingesetzt, gewonnen, bester Treffer) und Freispins automatisch abspielen. Schickte dazu eine frische `values.txt`.
+
+- `data.stats` (`gamble.stats`, `reset_stats`), erfasst in `finish` (zählt also auch beim Schließen mitten im Dreh): eingesetzt nur bezahlte Drehs (Einsatzwert × Multiplikator), zurück = Gewinne + Trostpreise zum aktuellen Itemwert, bester Treffer nach Wert. Zeile unten im Glücksrad-Bereich, Reset-Knopf (`tool_button`, `utility/reset`)
+- Auto-Freispins: nach einem Dreh mit offenen Freispins `storage.autospins[spieler] = 60` Frames, `gui.tick` startet dann den nächsten (eigene Tabelle, weil `storage.spins` während der Schleife nicht wachsen darf). Nur bei offenem Fenster; eigener Klick startet sofort
+- Simulation: Statistik deckt sich mit der unabhängigen Messung (52–54 %). Auto-Freispins headless nicht testbar (brauchen Spieler + Fenster)
+
 ### Arbeitsweise Cloud vs. lokal
 
 - In der Cloud gibt es kein Factorio. Der Push erreicht den lokalen Mod-Ordner (Junction) nur nach `git pull`, danach Factorio komplett neu starten (neue Einstellungen!) und `/gamble-recalc`

@@ -542,6 +542,47 @@ function gamble.spin(player, data)
   storage.spins[player.index] = true
 end
 
+-- ── Statistik ───────────────────────────────────────────────────────────────
+--
+-- Pro Spieler: eingesetzter und zurückgewonnener Wert, Drehs, Gewinne, Freispins und
+-- der wertvollste Treffer. Eingesetzt zählt nur, was bezahlt wurde (Freispins kosten
+-- nichts), zurück zählen Gewinne und Trostpreise. Das Verhältnis zeigt den Hausvorteil.
+
+function gamble.stats(data)
+  data.stats = data.stats or { staked = 0, returned = 0, spins = 0, wins = 0, freespins = 0 }
+  return data.stats
+end
+
+function gamble.reset_stats(data)
+  data.stats = nil
+end
+
+local function item_value(stack)
+  return values.is_selectable(stack.name) and values.stack(stack.name, stack.quality, stack.count) or 0
+end
+
+local function record_stats(data, result, wins, prizes)
+  local stats = gamble.stats(data)
+  stats.spins = stats.spins + 1
+  if result.free then
+    stats.freespins = stats.freespins + 1
+  elseif result.bet then
+    stats.staked = stats.staked + result.bet.stake_value * (result.multi or 1)
+  end
+  if wins > 0 then
+    stats.wins = stats.wins + 1
+    local hit = { name = result.name, quality = result.quality, count = result.count * wins }
+    hit.value = item_value(hit)
+    stats.returned = stats.returned + hit.value
+    if not stats.best or hit.value > stats.best.value then
+      stats.best = hit
+    end
+  end
+  for _, prize in ipairs(prizes) do
+    stats.returned = stats.returned + item_value(prize)
+  end
+end
+
 -- Walze steht (oder der Dreh wird abgebrochen, z.B. beim Schließen): auszahlen.
 -- Gibt das Ergebnis zurück, nil wenn kein Dreh lief.
 function gamble.finish(player, data)
@@ -578,6 +619,7 @@ function gamble.finish(player, data)
   for _, prize in ipairs(prizes) do
     result.prize_spilled = result.prize_spilled + pay(prize)
   end
+  record_stats(data, result, wins, prizes)
   data.last = result
   return result
 end
@@ -593,6 +635,9 @@ function gamble.remove_player(player_index)
   end
   storage.players[player_index] = nil
   storage.spins[player_index] = nil
+  if storage.autospins then
+    storage.autospins[player_index] = nil
+  end
 end
 
 return gamble

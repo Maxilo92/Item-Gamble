@@ -30,6 +30,7 @@ local PICKER = "item_gamble_picker"
 local INVENTORY_COLUMNS = 10
 local INVENTORY_ROWS = 10    -- mehr Zeilen scrollen
 local OUTPUT_ROWS = 8        -- Gewinn-Bereich: mehr Zeilen scrollen
+local AUTOSPIN_DELAY = 60    -- Frames Pause vor einem automatischen Freispin, Zeit fürs Ergebnis
 local PICKER_COLUMNS = 11   -- 6 Gruppen-Tabs à 75 px sind so breit wie 11 Slots
 local PICKER_ROWS = 10
 local NAMES = {
@@ -42,6 +43,7 @@ local NAMES = {
   target_amount = "item_gamble_target_amount",
   multi = "item_gamble_multi",
   take_all = "item_gamble_take_all",
+  reset_stats = "item_gamble_reset_stats",
   spin = "item_gamble_spin",
   picker_close = "item_gamble_picker_close",
   picker_search_button = "item_gamble_picker_search_button",
@@ -279,6 +281,23 @@ local function build_window(player, data)
   local output_frame = output_scroll.add({ type = "frame", style = "slot_button_deep_frame" })
   local output_table = output_frame.add({ type = "table", style = "slot_table", column_count = gamble.OUTPUT_COLUMNS })
 
+  -- Statistik: eingesetzt, zurück, bester Treffer. Erst sichtbar nach dem ersten Dreh.
+  local stats_line = content.add({ type = "line" })
+  local stats_row = content.add({ type = "flow", direction = "horizontal" })
+  stats_row.style.vertical_align = "center"
+  local stats = stats_row.add({ type = "label" })
+  stats.style.single_line = false
+  stats.style.maximal_width = reel.VISIBLE * reel.PITCH - 32
+  local stats_filler = stats_row.add({ type = "empty-widget" })
+  stats_filler.style.horizontally_stretchable = true
+  stats_row.add({
+    type = "sprite-button",
+    name = NAMES.reset_stats,
+    style = "tool_button",
+    sprite = "utility/reset",
+    tooltip = { "item-gamble.stats-reset" },
+  })
+
   local buttons = window.add({ type = "flow", style = "dialog_buttons_horizontal_flow" })
   -- Links wie der Zurück-Knopf in Vanilla-Dialogen: Gewinne ins Inventar räumen
   local take_all = buttons.add({
@@ -336,6 +355,9 @@ local function build_window(player, data)
     multi = multi,
     take_all = take_all,
     spin = spin,
+    stats = stats,
+    stats_line = stats_line,
+    stats_row = stats_row,
   }
 end
 
@@ -620,6 +642,19 @@ function gui.refresh(player, typing)
   elems.result.visible = data.last ~= nil
   if data.last then
     set_label(elems.result, result_caption(data.last))
+  end
+
+  -- Statistik: was rein ging, was zurückkam, und das Verhältnis (der Hausvorteil)
+  local stats = gamble.stats(data)
+  local has_stats = stats.spins > 0
+  elems.stats_line.visible = has_stats
+  elems.stats_row.visible = has_stats
+  if has_stats then
+    local best = stats.best and { "", stats.best.count, " × ", rich_item(stats.best.name, stats.best.quality) }
+      or { "item-gamble.chance-none" }
+    local ratio = stats.staked > 0 and string.format("%.0f", stats.returned / stats.staked * 100) or "–"
+    elems.stats.caption = { "item-gamble.stats", format_number(stats.staked), format_number(stats.returned), ratio, best }
+    elems.stats.tooltip = { "item-gamble.stats-tooltip", stats.spins, stats.wins, stats.freespins }
   end
 
   elems.spin.enabled = (free or state.ok) and not spinning
@@ -927,6 +962,9 @@ local function cleanup(player)
       announce(player, result)
     end
     gamble.return_items(player, data)
+    if storage.autospins then
+      storage.autospins[player.index] = nil
+    end
     data.open = false
     data.elems = nil
     data.last = nil
@@ -988,6 +1026,9 @@ local function on_click(event)
   elseif name == NAMES.take_all then
     gamble.take_output(player, data)
     gui.refresh(player)
+  elseif name == NAMES.reset_stats then
+    gamble.reset_stats(data)
+    gui.refresh(player)
   elseif name == NAMES.multi then
     if data.spin then
       return
@@ -997,6 +1038,10 @@ local function on_click(event)
     data.multi = step_multiplier(current, state.max_multi, event.button == defines.mouse_button_type.right)
     gui.refresh(player)
   elseif name == NAMES.spin then
+    -- Wer selbst klickt, wartet nicht auf den automatischen Freispin
+    if storage.autospins then
+      storage.autospins[player.index] = nil
+    end
     gamble.spin(player, data)
     -- Angehaltene Zeit (z.B. im Editor): ohne Ticks keine Animation, gleich auflösen
     if data.spin and game.tick_paused then
@@ -1124,6 +1169,27 @@ end
 -- Jeden Tick: laufende Walzen bewegen, fertige auszahlen. Gezählt werden eigene
 -- Frames statt Spielticks, damit ein geladener Spielstand dort weitermacht.
 function gui.tick()
+  -- Anstehende Freispins laufen nach einer kurzen Pause von selbst an, solange das
+  -- Fenster offen ist. Eigene Tabelle: storage.spins darf während der Schleife unten
+  -- keine neuen Einträge bekommen.
+  local auto = storage.autospins
+  if auto and next(auto) then
+    for index, frames in pairs(auto) do
+      if frames > 1 then
+        auto[index] = frames - 1
+      else
+        auto[index] = nil
+        local player = game.get_player(index)
+        local data = storage.players[index]
+        if player and data and data.open and data.elems and data.elems.window.valid
+          and not data.spin and gamble.next_freespin(data) then
+          gamble.spin(player, data)
+          gui.refresh(player)
+        end
+      end
+    end
+  end
+
   local spins = storage.spins
   if not (spins and next(spins)) then
     return
@@ -1145,6 +1211,10 @@ function gui.tick()
         end
         if panel_open then
           gui.refresh(player)
+          if gamble.next_freespin(data) then
+            storage.autospins = storage.autospins or {}
+            storage.autospins[index] = AUTOSPIN_DELAY
+          end
         else
           announce(player, result)
         end

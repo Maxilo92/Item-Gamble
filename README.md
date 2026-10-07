@@ -6,7 +6,8 @@ Stake an item, pick a target item and let the wheel of fortune decide. Needs Fac
 - **Chance:** you always play for more than you put in. The more the target is worth compared to your stake, the lower the chance. The stake only counts with half its value (like buying and selling prices): a 1:1 gamble (same item, same amount) is a coin flip at 50 %, everything more valuable is rarer.
 - **Wheel:** an animated reel with near misses, fast and slow spins. The stake is always gone, a win pays the target.
 - **Consolation prizes:** some of the losing fields hold small prizes worth about a tenth or a hundredth of the stake.
-- **Free spins:** a miss can give a free spin (5 %). Like on a slot machine it replays the bet it was won with, multiplier included, for free.
+- **Free spins:** a miss can give a free spin (5 %). Like on a slot machine it replays the bet it was won with, multiplier included, for free. Free spins play automatically one after another.
+- **Statistics:** value staked, value returned and your best hit, right in the window.
 - **Multiplier:** the green button next to Spin multiplies stake and prize of a spin (x1 up to x100). The chance stays the same.
 - **Vanilla controls:** the window shows your inventory, items move with the usual clicks (left, right, shift, ctrl). The stake slot is a supply for many spins.
 - **Prize area:** grows with your wins and never keeps empty rows. "Take all" moves everything to your inventory, ctrl click takes one kind.

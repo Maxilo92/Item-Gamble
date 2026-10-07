@@ -1,4 +1,13 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.23.0
+Date: 2026-10-07
+  Features:
+    - Statistics at the bottom of the window: value staked, value returned with the ratio (the
+      house edge made visible) and your best hit. The tooltip shows spins, wins and free spins,
+      the button next to it resets everything.
+    - Free spins play automatically one after another while the window is open, with a short pause
+      to read the result. Clicking Spin starts the next one right away.
+---------------------------------------------------------------------------------------------------
 Version: 0.22.0
 Date: 2026-10-07
   Changes:
