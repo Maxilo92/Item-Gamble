@@ -1,4 +1,9 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.14.0
+Date: 2026-10-07
+  Changes:
+    - Release preparation: English description, thumbnail, homepage, README and a packing script.
+---------------------------------------------------------------------------------------------------
 Version: 0.13.3
 Date: 2026-10-07
   Changes:

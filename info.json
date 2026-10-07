@@ -1,10 +1,11 @@
 {
   "name": "item-gamble",
-  "version": "0.13.3",
+  "version": "0.14.0",
   "title": "Item Gamble",
   "author": "Pries",
+  "homepage": "https://github.com/Maxilo92/Item-Gamble",
   "factorio_version": "2.0",
-  "description": "Setze ein Item ein, wähle ein Ziel und lass das Glücksrad entscheiden.",
+  "description": "Stake an item, pick a target and let the wheel of fortune decide. Item values are computed from recipes and research, chances from the value ratio, with consolation prizes and a multiplier.",
   "dependencies": [
     "base >= 2.0.0",
     "space-age >= 2.0.0"
