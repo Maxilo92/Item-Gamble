@@ -7,7 +7,7 @@ import zipfile
 root = pathlib.Path(__file__).resolve().parent.parent
 info = json.loads((root / "info.json").read_text(encoding="utf-8"))
 folder = f"{info['name']}_{info['version']}"
-include = ["info.json", "changelog.txt", "thumbnail.png", "control.lua", "data.lua", "settings.lua"]
+include = ["info.json", "changelog.txt", "thumbnail.png", "LICENSE", "control.lua", "data.lua", "settings.lua"]
 include_dirs = ["scripts", "locale", "graphics"]
 
 files = [root / f for f in include]

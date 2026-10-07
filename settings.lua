@@ -3,7 +3,7 @@ data:extend({
     type = "double-setting",
     name = "item-gamble-max-chance",
     setting_type = "runtime-global",
-    default_value = 0.75,
+    default_value = 1,
     minimum_value = 0.0001,
     maximum_value = 1,
     order = "a",

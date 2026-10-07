@@ -1,4 +1,13 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.20.0
+Date: 2026-10-07
+  Balancing:
+    - The maximum win chance defaults to 1 (was 0.75). Together with the stake value factor of 0.5
+      a 1:1 gamble (same item, same amount) is a coin flip at 50 %, more valuable targets are
+      rarer from there.
+  Info:
+    - The mod is licensed under MIT.
+---------------------------------------------------------------------------------------------------
 Version: 0.19.0
 Date: 2026-10-07
   Features:

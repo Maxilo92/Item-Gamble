@@ -240,6 +240,14 @@ User: „push und mach die Mod fertig fürs Mod-Portal“, dazu: viele Gewinn-Sl
 - Portal-Check: Changelog-Format geprüft (99 Striche, Kategorien, keine Doppelversionen), Headless-Ladetest mit der Release-Zip (frische Karte, Space Age, on_init + Wertberechnung ohne Fehler), keine Chat-Ausgaben beim Start, README als Portal-Beschreibung aktualisiert
 - Hochladen macht der User selbst (Portal-Login); Zip aus `tools/pack_mod.py` in `dist/`
 
+### 0.20.0: 1:1 = 50 %, MIT
+
+User: MIT-Lizenz anlegen; ein 1:1-Gamble (gleiches Item, gleiche Menge) soll bei 50 % starten.
+
+- `item-gamble-max-chance` Standard 1 (statt 0,75): `chance = 1 × 0,5 / r`, also 50 % bei r = 1, Rückfluss im Schnitt 50 %
+- `LICENSE` (MIT, Copyright Maxilo), wird von `tools/pack_mod.py` mitgepackt. Auf dem Portal beim Upload ebenfalls MIT wählen
+- Commit-Nachrichten mit Anführungszeichen über `git commit -F <datei>`, in PowerShell zerlegt `-m @'…'@` sonst die Argumente (0.19.0: Tag landete kurz auf dem falschen Commit)
+
 ### Arbeitsweise Cloud vs. lokal
 
 - In der Cloud gibt es kein Factorio. Der Push erreicht den lokalen Mod-Ordner (Junction) nur nach `git pull`, danach Factorio komplett neu starten (neue Einstellungen!) und `/gamble-recalc`
