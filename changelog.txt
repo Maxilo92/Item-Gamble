@@ -1,4 +1,16 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.15.0
+Date: 2026-10-07
+  Changes:
+    - The multiplier is a green button next to Spin: click steps through x1, x5, x10, x20, x50 and
+      x100 (right click goes back). Steps the stake cannot cover are skipped, if the stake runs low
+      the button shows how many spins are left.
+    - Much less text in the window: no captions for slots and inventory, no hints for an empty
+      stake or target, shorter messages and tooltips. Item values moved into the tooltip of the
+      chance, problems are shown in red in place of the chance.
+    - The prize area is one row of ten slots below the wheel.
+    - Author is Maxilo.
+---------------------------------------------------------------------------------------------------
 Version: 0.14.0
 Date: 2026-10-07
   Changes:

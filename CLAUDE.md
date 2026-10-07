@@ -203,6 +203,15 @@ User zu 0.10.0: Spielfigur-Fenster + Panel „viel zu breit, das muss sein eigen
 - Zeile „Drehs“ (`data.multi`, Slider + Feld, bis `gamble.MAX_SPINS` = 100, soweit der Vorrat reicht). Jeder Dreh würfelt einzeln, Ergebnis `wins`, `spins`, `prizes` (zusammengefasst). Walze zeigt Gewinn, wenn mindestens einer gewann, sonst Trostpreis oder leer. Auszahlung in `gamble.finish` (Gewinn-Bereich, dann Inventar, dann Boden)
 - **Lehren aus Abstürzen:** Factorio-Lua ist 5.2, kein `//` (0.13.1 ließ das Fenster nicht öffnen). GUI-Elemente unter demselben Elternteil brauchen eindeutige Namen: mehrere gleiche Knöpfe über `tags` unterscheiden, nicht über `name` (0.13.2)
 
+### 0.15.0: Weniger Text, Multiplikator-Knopf
+
+User: UI gefällt noch nicht ganz, v.a. die Knöpfe; neben Drehen ein grüner Knopf mit dem Multiplikator (x5, x20 …), Klick schaltet durch; zu viel Text, vieles ist selbsterklärend.
+
+- Multiplikator-Zeile (Slider) raus, stattdessen `green_button` (Höhe 32, Schrift `default-dialog-button`) links neben Drehen. Stufen 1/5/10/20/50/100, Rechtsklick zurück, Stufen über dem Vorrat werden übersprungen. `data.multi` bleibt die gewählte Stufe (wird nicht mehr auf den Vorrat geklemmt); reicht der Vorrat nicht, zeigt der Knopf die tatsächliche Zahl
+- Keine Beschriftungen mehr (Einsatz/Ziel/Gewinn/Spielfigur/Gewinnchance), keine Hinweise bei leerem Einsatz/Ziel. Tooltips nur noch Namen. Werte stehen im Tooltip der Chance, Probleme ersetzen die Chance rot über der Walze
+- Gewinn-Bereich: eine Reihe mit 10 Slots unter der Walze; Ergebnistext kurz, Trostpreise bei mehreren Drehs nur als Symbole
+- Zuerst lokal als 0.14.0 gebaut, kollidierte mit der Release-Vorbereitung 0.14.0 aus der Cloud (Thumbnail, README, `tools/pack_mod.py`); auf 0.15.0 umnummeriert. Installiert ist jetzt eine Zip aus `pack_mod.py`, kein Junction mehr. Autor in info.json: Maxilo
+
 ### Arbeitsweise Cloud vs. lokal
 
 - In der Cloud gibt es kein Factorio. Der Push erreicht den lokalen Mod-Ordner (Junction) nur nach `git pull`, danach Factorio komplett neu starten (neue Einstellungen!) und `/gamble-recalc`

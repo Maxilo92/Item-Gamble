@@ -1,7 +1,7 @@
 -- Eigenes Fenster, aufgebaut wie ein Kistenfenster: links das eigene Inventar, rechts
 -- das Glücksrad (Einsatz-Slot als Vorrat mit Menge pro Dreh, Ziel-Slot mit Menge,
--- Gewinn-Slot, Chance, Walze), unten Drehen. Das Fenster ist player.opened, E und
--- Esc schließen es wie jedes andere.
+-- Chance, Walze, Gewinn-Bereich), unten Multiplikator und Drehen. Das Fenster ist
+-- player.opened, E und Esc schließen es wie jedes andere.
 --
 -- Factorios eigenes Inventarfenster lässt sich nicht einbetten: ein geöffnetes
 -- Script-Inventar zeichnet immer einen Inventarkasten daneben, das Spielfigur-Fenster
@@ -39,9 +39,7 @@ local NAMES = {
   target = "item_gamble_target",
   target_slider = "item_gamble_target_slider",
   target_amount = "item_gamble_target_amount",
-  output = "item_gamble_output",
-  multi_slider = "item_gamble_multi_slider",
-  multi_amount = "item_gamble_multi_amount",
+  multi = "item_gamble_multi",
   spin = "item_gamble_spin",
   picker_close = "item_gamble_picker_close",
   picker_search_button = "item_gamble_picker_search_button",
@@ -55,9 +53,8 @@ local TAGS = {
   output = "item_gamble_output_slot",
 }
 
+-- Leerer Einsatz oder fehlendes Ziel brauchen keinen Text, das sieht man
 local PROBLEM_KEYS = {
-  ["no-stake"] = "item-gamble.problem-no-stake",
-  ["no-target"] = "item-gamble.problem-no-target",
   ["stake-no-value"] = "item-gamble.problem-stake-no-value",
   ["stake-equipment"] = "item-gamble.problem-stake-equipment",
   ["target-no-value"] = "item-gamble.problem-target-no-value",
@@ -65,11 +62,39 @@ local PROBLEM_KEYS = {
   ["lower"] = "item-gamble.problem-lower",
   ["below-min"] = "item-gamble.problem-below-min",
 }
--- Hinweise statt Fehler: normale Schrift statt rot
-local HINTS = {
-  ["no-stake"] = true,
-  ["no-target"] = true,
-}
+
+local MULTIPLIERS = { 1, 5, 10, 20, 50, 100 }
+
+-- Nächste Stufe (back: vorherige), soweit der Vorrat reicht; am Ende geht es von vorn los.
+-- current ist der tatsächliche Multiplikator, max nil heißt: noch kein Einsatz.
+local function step_multiplier(current, max, back)
+  local steps = {}
+  for _, step in ipairs(MULTIPLIERS) do
+    if step <= (max or gamble.MAX_SPINS) then
+      steps[#steps + 1] = step
+    end
+  end
+  local index = 1
+  for k, step in ipairs(steps) do
+    if step <= current then
+      index = k
+    end
+  end
+  if back then
+    -- Zwischen zwei Stufen (Vorrat knapp) ist die untere schon die vorherige
+    if steps[index] == current then
+      index = index - 1
+    end
+  else
+    index = index + 1
+  end
+  if index < 1 then
+    index = #steps
+  elseif index > #steps then
+    index = 1
+  end
+  return steps[index]
+end
 
 local function format_number(v)
   if v >= 1e6 then
@@ -131,13 +156,11 @@ local function build_window(player, data)
 
   -- Links: das eigene Inventar, wie die linke Hälfte eines Kistenfensters
   local inventory_frame = columns.add({ type = "frame", style = "inside_shallow_frame_with_padding", direction = "vertical" })
-  inventory_frame.add({ type = "label", style = "caption_label", caption = { "item-gamble.inventory" } })
   local inventory_scroll = inventory_frame.add({
     type = "scroll-pane",
     style = "naked_scroll_pane",
     horizontal_scroll_policy = "never",
   })
-  inventory_scroll.style.top_margin = 4
   inventory_scroll.style.maximal_height = INVENTORY_ROWS * 40
   local inventory_slots_frame = inventory_scroll.add({ type = "frame", style = "slot_button_deep_frame" })
   local inventory = inventory_slots_frame.add({ type = "table", style = "slot_table", column_count = INVENTORY_COLUMNS })
@@ -145,7 +168,8 @@ local function build_window(player, data)
   no_inventory.style.single_line = false
   no_inventory.style.maximal_width = INVENTORY_COLUMNS * 40
 
-  -- Rechts: Glücksrad
+  -- Rechts: Glücksrad. Ohne Beschriftungen, die Slots erklären sich selbst;
+  -- Namen und Werte stehen in den Tooltips.
   local content = columns.add({
     type = "frame",
     style = "inside_shallow_frame_with_padding_and_vertical_spacing",
@@ -153,8 +177,8 @@ local function build_window(player, data)
   })
   content.style.vertically_stretchable = true
 
-  -- Bezeichnung | Slot | Menge (Slider + Zahl) | Wert
-  local slots = content.add({ type = "table", column_count = 4 })
+  -- Slot | Menge (Slider + Zahl)
+  local slots = content.add({ type = "table", column_count = 2 })
   slots.style.horizontal_spacing = 12
   slots.style.vertical_spacing = 4
   slots.style.vertical_align = "center"
@@ -186,48 +210,21 @@ local function build_window(player, data)
     return slider, field
   end
 
-  slots.add({ type = "label", style = "caption_label", caption = { "item-gamble.stake" } })
   local stake = slots.add({ type = "sprite-button", name = NAMES.stake, style = "inventory_slot", tooltip = { "item-gamble.stake-tooltip" } })
   local stake_slider, stake_amount = amount(NAMES.stake_slider, NAMES.stake_amount, { "item-gamble.stake-amount-tooltip" })
-  local stake_value = slots.add({ type = "label" })
 
-  slots.add({ type = "label", style = "caption_label", caption = { "item-gamble.target" } })
   local target = slots.add({ type = "sprite-button", name = NAMES.target, style = "slot_button", tooltip = { "item-gamble.target-tooltip" } })
   local target_slider, target_amount = amount(NAMES.target_slider, NAMES.target_amount, { "item-gamble.count-tooltip" })
-  local target_value = slots.add({ type = "label" })
-
-  slots.add({ type = "label", style = "caption_label", caption = { "item-gamble.multi" } })
-  slots.add({ type = "empty-widget" })
-  local multi_slider, multi_amount = amount(NAMES.multi_slider, NAMES.multi_amount, { "item-gamble.multi-tooltip" })
-  local multi_value = slots.add({ type = "label" })
-
-  -- Gewinn-Bereich: mehrere Slots, damit auch Trostpreise und viele Drehs Platz haben
-  local output_row = content.add({ type = "flow", direction = "horizontal" })
-  local output_label = output_row.add({ type = "label", style = "caption_label", caption = { "item-gamble.output" } })
-  output_label.style.minimal_width = 56
-  local output_frame = output_row.add({ type = "frame", style = "slot_button_deep_frame" })
-  local output_table = output_frame.add({ type = "table", style = "slot_table", column_count = math.floor(gamble.OUTPUT_SLOTS / 2) })
-  local output_buttons = {}
-  for i = 1, gamble.OUTPUT_SLOTS do
-    output_buttons[i] = output_table.add({
-      type = "sprite-button",
-      style = "inventory_slot",
-      tags = { [TAGS.output] = i },
-      tooltip = { "item-gamble.output-tooltip" },
-    })
-  end
 
   content.add({ type = "line" })
 
-  local chance_row = content.add({ type = "flow", direction = "horizontal" })
-  chance_row.style.vertical_align = "center"
-  chance_row.add({ type = "label", style = "bold_label", caption = { "item-gamble.chance-label" } })
-  local chance = chance_row.add({ type = "label", style = "heading_2_label" })
-
+  -- Chance (oder was den Dreh verhindert), Walze, Ergebnis, Gewinn - mittig untereinander
   local reel_box = content.add({ type = "flow", direction = "vertical" })
   reel_box.style.horizontal_align = "center"
   reel_box.style.horizontally_stretchable = true
   reel_box.style.vertical_spacing = 0
+  local chance = reel_box.add({ type = "label", style = "heading_2_label" })
+  chance.style.bottom_margin = 4
   local reel_frame = reel_box.add({ type = "frame", style = "deep_frame_in_shallow_frame" })
   local viewport = reel_frame.add({
     type = "scroll-pane",
@@ -251,23 +248,44 @@ local function build_window(player, data)
   pointer.style.width = 24
   pointer.style.height = 24
   pointer.style.stretch_image_to_widget_size = true
-
-  local message = content.add({ type = "label" })
-  local result = content.add({ type = "label" })
+  local result = reel_box.add({ type = "label" })
   result.style.single_line = false
   result.style.maximal_width = reel.VISIBLE * reel.PITCH
+
+  -- Gewinn-Bereich: eine Reihe so breit wie die Walze
+  local output_frame = reel_box.add({ type = "frame", style = "slot_button_deep_frame" })
+  output_frame.style.top_margin = 8
+  local output_table = output_frame.add({ type = "table", style = "slot_table", column_count = gamble.OUTPUT_SLOTS })
+  local output_buttons = {}
+  for i = 1, gamble.OUTPUT_SLOTS do
+    output_buttons[i] = output_table.add({
+      type = "sprite-button",
+      style = "inventory_slot",
+      tags = { [TAGS.output] = i },
+      tooltip = { "item-gamble.output-tooltip" },
+    })
+  end
 
   local buttons = window.add({ type = "flow", style = "dialog_buttons_horizontal_flow" })
   local filler = buttons.add({ type = "empty-widget", style = "draggable_space", ignored_by_interaction = true })
   filler.style.horizontally_stretchable = true
   filler.style.height = 32
   filler.drag_target = window
+  -- Multiplikator: Klick schaltet weiter, Rechtsklick zurück. So hoch und fett wie Drehen.
+  local multi = buttons.add({
+    type = "button",
+    name = NAMES.multi,
+    style = "green_button",
+    tooltip = { "item-gamble.multi-tooltip" },
+  })
+  multi.style.height = 32
+  multi.style.minimal_width = 64
+  multi.style.font = "default-dialog-button"
   local spin = buttons.add({
     type = "button",
     name = NAMES.spin,
-    style = "confirm_button",
+    style = "confirm_button_without_tooltip",
     caption = { "item-gamble.spin" },
-    tooltip = { "item-gamble.spin-tooltip" },
   })
 
   if data.window_location then
@@ -284,19 +302,14 @@ local function build_window(player, data)
     stake = stake,
     stake_slider = stake_slider,
     stake_amount = stake_amount,
-    stake_value = stake_value,
     target = target,
     target_slider = target_slider,
     target_amount = target_amount,
-    target_value = target_value,
-    multi_slider = multi_slider,
-    multi_amount = multi_amount,
-    multi_value = multi_value,
     output_buttons = output_buttons,
     chance = chance,
     reel_slots = reel_slots,
-    message = message,
     result = result,
+    multi = multi,
     spin = spin,
   }
 end
@@ -393,7 +406,8 @@ local function problem_caption(state, data)
   elseif problem == "target-no-value" then
     return { PROBLEM_KEYS[problem], rich_item(data.target.name, data.target.quality) }
   elseif problem == "below-min" then
-    return { PROBLEM_KEYS[problem], chance_caption(settings.global["item-gamble-min-chance"].value) }
+    return { PROBLEM_KEYS[problem], chance_caption(state.chance),
+      chance_caption(settings.global["item-gamble-min-chance"].value) }
   end
   return { PROBLEM_KEYS[problem] }
 end
@@ -421,7 +435,7 @@ local function result_caption(last)
   else
     return { "item-gamble.result-lost" }, "bold_red_label"
   end
-  -- Trostpreise: bei mehreren Drehs als Liste (die Einzelpreis-Meldung steht schon im Text)
+  -- Trostpreise bei mehreren Drehs nur als Symbole, die Mengen liegen im Gewinn-Bereich
   if #prizes > 0 and (spins > 1 or wins > 0) then
     local list = {}
     for k, prize in ipairs(prizes) do
@@ -429,9 +443,9 @@ local function result_caption(last)
         list[#list + 1] = "…"
         break
       end
-      list[#list + 1] = prize.count .. " × " .. rich_item(prize.name, prize.quality)
+      list[#list + 1] = rich_item(prize.name, prize.quality)
     end
-    text = { "", text, " ", { "item-gamble.result-prizes", table.concat(list, ", ") } }
+    text = { "", text, "  ", { "item-gamble.result-prizes", table.concat(list) } }
   end
   if spilled > 0 then
     text = { "", text, " ", { "item-gamble.result-spilled", spilled } }
@@ -493,31 +507,11 @@ function gui.refresh(player, typing)
   if state.count and typing ~= NAMES.target_amount then
     data.count = state.count
   end
-  if state.spins and typing ~= NAMES.multi_amount then
-    data.multi = state.spins
-  end
+  -- data.multi bleibt die gewählte Stufe; reicht der Vorrat nicht, zeigt der Knopf weniger
 
   local stake = state.stake
   show_amount(elems.stake_slider, elems.stake_amount, stake and stake.count, stake and stake.available,
     not spinning, typing == NAMES.stake_amount)
-  if state.stake_value then
-    if stake.spoil > 0 then
-      elems.stake_value.caption = { "item-gamble.value-fresh", format_number(state.stake_value),
-        string.format("%.0f", (1 - stake.spoil) * 100) }
-    else
-      elems.stake_value.caption = { "item-gamble.value", format_number(state.stake_value) }
-    end
-  else
-    elems.stake_value.caption = ""
-  end
-
-  show_amount(elems.multi_slider, elems.multi_amount, state.spins, state.max_spins,
-    not spinning, typing == NAMES.multi_amount)
-  if state.spins and state.spins > 1 and state.stake_value then
-    elems.multi_value.caption = { "item-gamble.multi-total", format_number(state.stake_value * state.spins) }
-  else
-    elems.multi_value.caption = ""
-  end
 
   local target = elems.target
   if data.target then
@@ -534,24 +528,33 @@ function gui.refresh(player, typing)
   target.enabled = not spinning
   show_amount(elems.target_slider, elems.target_amount, state.count, state.max_count,
     not spinning, typing == NAMES.target_amount)
-  elems.target_value.caption = state.target_value and { "item-gamble.value", format_number(state.target_value) } or ""
 
+  -- Über der Walze: die Chance, oder rot, was den Dreh verhindert. Die Werte im Tooltip.
+  local chance = elems.chance
   if spinning then
-    elems.chance.caption = chance_caption(data.spin.chance)
-    elems.chance.style = "heading_2_label"
+    set_label(chance, chance_caption(data.spin.chance), "heading_2_label")
+  elseif PROBLEM_KEYS[state.problem] then
+    set_label(chance, problem_caption(state, data), "bold_red_label")
   elseif state.chance then
-    elems.chance.caption = chance_caption(state.chance)
-    elems.chance.style = state.ok and "heading_2_label" or "bold_red_label"
+    set_label(chance, chance_caption(state.chance), "heading_2_label")
   else
-    elems.chance.caption = { "item-gamble.chance-none" }
-    elems.chance.style = "heading_2_label"
+    set_label(chance, { "item-gamble.chance-none" }, "heading_2_label")
+  end
+  chance.style.bottom_margin = 4
+  if state.stake_value and state.target_value and not spinning then
+    local stake_value = format_number(state.stake_value)
+    if stake.spoil > 0 then
+      stake_value = { "item-gamble.value-fresh", stake_value, string.format("%.0f", (1 - stake.spoil) * 100) }
+    end
+    chance.tooltip = { "item-gamble.chance-tooltip", stake_value, format_number(state.target_value) }
+  else
+    chance.tooltip = ""
   end
 
-  local show_problem = state.problem ~= nil and not spinning
-  elems.message.visible = show_problem
-  if show_problem then
-    set_label(elems.message, problem_caption(state, data), HINTS[state.problem] and "label" or "bold_red_label")
-  end
+  local multi = spinning and data.spin.spins or state.spins
+    or math.max(1, math.min(math.floor(data.multi or 1), gamble.MAX_SPINS))
+  elems.multi.caption = "×" .. multi
+  elems.multi.enabled = not spinning
 
   elems.result.visible = data.last ~= nil
   if data.last then
@@ -905,6 +908,14 @@ local function on_click(event)
   elseif tags[TAGS.output] then
     gamble.click_slot(player, data.output_inventory[tags[TAGS.output]], event, false)
     gui.refresh(player)
+  elseif name == NAMES.multi then
+    if data.spin then
+      return
+    end
+    local state = gamble.evaluate(data)
+    local current = state.spins or math.max(1, math.min(math.floor(data.multi or 1), gamble.MAX_SPINS))
+    data.multi = step_multiplier(current, state.max_spins, event.button == defines.mouse_button_type.right)
+    gui.refresh(player)
   elseif name == NAMES.spin then
     gamble.spin(player, data)
     -- Angehaltene Zeit (z.B. im Editor): ohne Ticks keine Animation, gleich auflösen
@@ -973,9 +984,6 @@ local function on_text_changed(event)
   elseif name == NAMES.target_amount then
     data.count = math.max(1, math.floor(tonumber(element.text) or 1))
     gui.refresh(player, name)
-  elseif name == NAMES.multi_amount then
-    data.multi = math.max(1, math.floor(tonumber(element.text) or 1))
-    gui.refresh(player, name)
   elseif name == NAMES.picker_search and data.picker then
     data.picker.search = string.lower(element.text)
     fill_picker_items(event.player_index, data.picker)
@@ -997,8 +1005,6 @@ local function on_value_changed(event)
     data.stake_count = value
   elseif element.name == NAMES.target_slider then
     data.count = value
-  elseif element.name == NAMES.multi_slider then
-    data.multi = value
   else
     return
   end
@@ -1008,8 +1014,7 @@ end
 -- Enter oder Fokusverlust: Mengenfeld auf den gültigen Bereich setzen
 local function on_confirmed(event)
   local element = event.element
-  if element and element.valid and (element.name == NAMES.stake_amount or element.name == NAMES.target_amount
-    or element.name == NAMES.multi_amount) then
+  if element and element.valid and (element.name == NAMES.stake_amount or element.name == NAMES.target_amount) then
     gui.refresh(game.get_player(event.player_index))
   end
 end
