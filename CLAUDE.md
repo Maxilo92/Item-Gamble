@@ -184,3 +184,27 @@ User zu 0.10.0: Spielfigur-Fenster + Panel „viel zu breit, das muss sein eigen
 - Inventar-Raster bewegt echte Items (`gamble.click_inventory`): links aufnehmen + `player.hand_location` setzen (Hand-Symbol `utility/hand`, Q legt zurück), ablegen, tauschen; rechts halb/eins; Shift → Einsatz (Shift+Rechts halb); Strg → alle Items dieser Sorte in den Einsatz. Anders als 0.4.0 (dort nur Auswahl/Reservierung)
 - Zielauswahl ist beim Öffnen `player.opened` (Esc schließt erst sie), danach zurück ans Fenster (`data.switching` gegen das falsche on_gui_closed)
 - Zugangswege, die verworfen wurden: Script-Inventar (zeichnet immer einen Inventarkasten), Spielfigur-Fenster (zu breit), versteckte Entität (Entity-GUIs schließen außer Reichweite, nicht getestet)
+
+### 0.11.1 / 0.11.2: Feinschliff der Werte
+
+- Erste vollständige `values.txt` vom User ausgewertet. Samen waren ~126 (2 % Ausbeute trug die halben Kosten): `yumako-seed`/`jellynut-seed` jetzt Grundwert 10
+- Neu in `base-values.lua`: `min_value` (Schlüssel `item/name`, Endwert inkl. Fortschritt). Greift in `values.lua` (`relax`), hebt auch das Material mit an. Weltraum-Paket 250 (5 Pakete aus 2 Eisen, 1 Kohlenstoff, 1 Eis, vorher 4,9), Agrar 200, Kryo 700. Reihenfolge jetzt Chemie 105 < Agrar < Weltraum < Metallurgie 307 < Elektromagnetik 393 < Produktion/Nutzen ~470 < Kryo < Promethium ~3290
+- Bei gleichem Mindestwert gewinnt der früher erreichbare Weg (sonst zeigte das Weltraum-Paket die Aquilo-Eis-Route)
+- Noch offen im Feintuning: Quantenprozessor (650, nur ~2× Verarbeitungseinheit), Fusionszelle (130)
+
+### 0.12.0: Trostpreise
+
+- Einstellung `item-gamble-consolation-chance` (Standard 0,35): Anteil der Nieten-Felder mit Trostpreis. Preis ≈ 1/10 oder 1/100 des Einsatzwerts (`values.prize_picker`, Item mit Wert ≤ Budget, bevorzugt höchstens 20 Stück), sonst leeres Feld
+- Beim Dreh wird pro Niete gewürfelt (Dichte), die Walze stoppt dann auf dem passenden Feld (`plan.fill[plan.stop]`). Kosten im Schnitt ~2 % des Einsatzwerts
+
+### 0.13.0 - 0.13.2: Gewinn-Bereich, mehrere Drehs
+
+- Gewinn-Bereich: `gamble.OUTPUT_SLOTS` = 10 Slots (2 × 5), Migration vom Ein-Slot-Inventar in `gamble.get`. Gesperrt nur, wenn `can_insert` für das Ziel scheitert
+- Zeile „Drehs“ (`data.multi`, Slider + Feld, bis `gamble.MAX_SPINS` = 100, soweit der Vorrat reicht). Jeder Dreh würfelt einzeln, Ergebnis `wins`, `spins`, `prizes` (zusammengefasst). Walze zeigt Gewinn, wenn mindestens einer gewann, sonst Trostpreis oder leer. Auszahlung in `gamble.finish` (Gewinn-Bereich, dann Inventar, dann Boden)
+- **Lehren aus Abstürzen:** Factorio-Lua ist 5.2, kein `//` (0.13.1 ließ das Fenster nicht öffnen). GUI-Elemente unter demselben Elternteil brauchen eindeutige Namen: mehrere gleiche Knöpfe über `tags` unterscheiden, nicht über `name` (0.13.2)
+
+### Arbeitsweise Cloud vs. lokal
+
+- In der Cloud gibt es kein Factorio. Der Push erreicht den lokalen Mod-Ordner (Junction) nur nach `git pull`, danach Factorio komplett neu starten (neue Einstellungen!) und `/gamble-recalc`
+- Tags lassen sich aus der Cloud nicht pushen (Proxy): `v0.11.1` liegt auf GitHub, `v0.11.2` bis `v0.13.2` nur lokal in der Cloud. Lokal nachziehen: `git tag v0.11.2 3f3776e`, `v0.12.0 67f411a`, `v0.13.0 2d90df2`, `v0.13.1 7bce615`, `v0.13.2 db826a5`, dann `git push --tags`
+- Weitere Wünsche des Users zuletzt: Gewinn-Bereich größer, mehrere Drehs auf einmal (erledigt); Feedback zum 0.11.0-Fensterlayout steht weiter aus
