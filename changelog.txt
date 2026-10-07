@@ -1,4 +1,13 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.18.0
+Date: 2026-10-07
+  Balancing:
+    - New setting "Stake value factor" (default 0.5): for the chance the stake only counts with half
+      its value, like buying and selling prices. The target still has to be worth more than the
+      full stake. Trading items of equal value is no safe deal anymore: the chance is at most
+      37.5 % (was 75 %), e.g. 20 promethium science packs for 600 uranium fuel cells drop from
+      73 % to 36 %.
+---------------------------------------------------------------------------------------------------
 Version: 0.17.0
 Date: 2026-10-07
   Changes:

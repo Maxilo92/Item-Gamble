@@ -520,6 +520,9 @@ end
 -- Gewinnchance für einen Einsatz- und einen Zielwert.
 -- Gibt chance, r, grund zurück. grund ist nil, "no-value", "lower" (Ziel billiger
 -- als Einsatz, gesperrt) oder "below-min" (Chance unter der Minimalchance).
+-- Gespielt wird immer um mehr als den vollen Einsatzwert ("lower" prüft r mit dem
+-- vollen Wert), für die Chance zählt der Einsatz aber nur mit dem Einsatz-Wertfaktor.
+-- Wie An- und Verkaufspreis: gleichwertiges Tauschen ist so kein sicheres Geschäft.
 function values.chance(stake_value, target_value)
   if not stake_value or not target_value or stake_value <= 0 then
     return nil, nil, "no-value"
@@ -530,7 +533,8 @@ function values.chance(stake_value, target_value)
   end
   local max = settings.global["item-gamble-max-chance"].value
   local min = math.min(settings.global["item-gamble-min-chance"].value, max)
-  local chance = max / r
+  local factor = settings.global["item-gamble-stake-value-factor"].value
+  local chance = max * factor / r
   if chance < min then
     return chance, r, "below-min"
   end

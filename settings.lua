@@ -10,6 +10,15 @@ data:extend({
   },
   {
     type = "double-setting",
+    name = "item-gamble-stake-value-factor",
+    setting_type = "runtime-global",
+    default_value = 0.5,
+    minimum_value = 0.01,
+    maximum_value = 1,
+    order = "a-b",
+  },
+  {
+    type = "double-setting",
     name = "item-gamble-min-chance",
     setting_type = "runtime-global",
     default_value = 0.00001,

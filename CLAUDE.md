@@ -225,7 +225,12 @@ User zu 0.15.0: jetzt zu wenig Text, Einsatz- und Zielfeld unklar; der Multiplik
 User: Gewinn-Slots sollen mit den tatsächlichen Gewinnen wachsen, bei Niete nichts erweitern, nie Luft.
 
 - `gamble.fit_output(data)`: Lücken rücken nach vorne (`swap_stack`, Reihenfolge bleibt), Größe = belegte Reihen, mindestens eine. `grow_output` in `finish` hängt vor dem Auszahlen genau die fehlenden Reihen an (`get_insertable_count`), bis 200; `output-blocked` nur noch bei 200 voll
-- Offen: User fand den Screenshot-Gewinn „zu op“ (1 Promethium 3290 → 40 kalte Fluoroketon-Fässer à 118, 54,8 %, ×20 = 800 Fässer). Nachgefragt, was genau
+### 0.18.0: Einsatz zählt halb
+
+User: „20 Promethium für 600 Brennelemente zu über 70 %?! Das muss seltener werden“, Idee: Wert Einsatz ≠ Wert Ziel fürs gleiche Item.
+
+- Einstellung `item-gamble-stake-value-factor` (Standard 0,5): `chance = max × faktor / r`. „lower“ prüft weiter mit dem vollen Wert, gespielt wird also immer um mehr als den Einsatz. Höchstchance effektiv 37,5 %, Rückfluss im Schnitt 37,5 % (+ Trostpreise ~2 %)
+- Nebenwirkung: Der Kalibrierpunkt 1 rot → 100 Promethium liegt jetzt bei halber Chance, also unter der Minimalchance (gesperrt). Falls gewünscht: Minimalchance auf 0,000005 senken
 
 ### Arbeitsweise Cloud vs. lokal
 
