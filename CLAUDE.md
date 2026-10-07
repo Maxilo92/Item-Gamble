@@ -273,6 +273,16 @@ User wählte aus meiner Vorschlagsliste: Statistik (eingesetzt, gewonnen, bester
 - Auto-Freispins: nach einem Dreh mit offenen Freispins `storage.autospins[spieler] = 60` Frames, `gui.tick` startet dann den nächsten (eigene Tabelle, weil `storage.spins` während der Schleife nicht wachsen darf). Nur bei offenem Fenster; eigener Klick startet sofort
 - Simulation: Statistik deckt sich mit der unabhängigen Messung (52–54 %). Auto-Freispins headless nicht testbar (brauchen Spieler + Fenster)
 
+### 0.24.0: Wertedurchgang
+
+User: „balance alles“ (nach Sichtung seiner `values.txt`).
+
+- Biter-Ei 165 → 15, Promethium-Brocken 165 → 30. Beide stammten aus der alten Kalibrierung (1 rot → 100 Promethium ≈ Minimalchance) und blähten Überwucherungs-Boden (8780), Biolab, Spawner und Promethium auf
+- Mindestwerte: Promethium-Paket 1500 (≈ 2 × Kryo), Quantenprozessor 1000 (≈ 3,3 × Verarbeitungseinheit)
+- Bewusst gelassen: Fusions-Reaktor-Ausrüstung > Spidertron (250 Quantenprozessoren + Spaltreaktor gegen 2 Spaltreaktoren)
+- Kalibrierung bleibt erfüllt: 1 rot → 100 Promethium = 1:66.519, knapp über der Minimalchance
+- Vorgehen: neue Werte per Testkopie mit `commands_debug.write_report(nil)` im Headless-Lauf erzeugt und mit der `values.txt` des Users verglichen (Skript im Scratchpad). Klippensprengstoff weicht nur ab, weil eine Mod des Users die Forschung vorverlegt (6,4 h statt 73 h)
+
 ### Arbeitsweise Cloud vs. lokal
 
 - In der Cloud gibt es kein Factorio. Der Push erreicht den lokalen Mod-Ordner (Junction) nur nach `git pull`, danach Factorio komplett neu starten (neue Einstellungen!) und `/gamble-recalc`

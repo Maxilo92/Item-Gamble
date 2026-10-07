@@ -18,10 +18,15 @@ return {
   -- Mindestwerte (Endwert inkl. Fortschritt). Greifen nur, wenn die Rezepte zu billig sind,
   -- z.B. bei Wissenschaftspaketen, die kaum Rohstoffe brauchen (5 Weltraumpakete aus 2 Eisen,
   -- 1 Kohlenstoff, 1 Eis). Reihenfolge soll stimmen: Chemie 105 < Weltraum < Produktion/Nutzen ~470 < Kryo.
+  -- Promethium ist die letzte Wissenschaft und liegt deutlich über Kryo. Der
+  -- Quantenprozessor besteht aus billigen Zutaten (1 Verarbeitungseinheit + Kleinkram),
+  -- braucht aber Aquilo, Kryo-Anlage und Fluoroketon: gut das Dreifache der Verarbeitungseinheit.
   min_value = {
     ["item/space-science-pack"] = 250,
     ["item/agricultural-science-pack"] = 200,
     ["item/cryogenic-science-pack"] = 700,
+    ["item/promethium-science-pack"] = 1500,
+    ["item/quantum-processor"] = 1000,
   },
 
   -- Rohstoffe aus anderen Mods, die hier fehlen und für die es kein Rezept gibt
@@ -54,8 +59,10 @@ return {
     -- Erste Eier kommen von den Eiflößen, das Zuchtrezept braucht schon eine Biokammer
     ["pentapod-egg"] = 20,
 
-    -- Nauvis-Biter (Gefangener Spawner: das Rezept hat keine Zutaten)
-    ["biter-egg"] = 165,
+    -- Nauvis-Biter: Das Rezept hat keine Zutaten, ein gefangener Spawner legt Eier am
+    -- laufenden Band und frisst dafür nur Bioflux (~12). Früher 165 (für eine Kalibrierung),
+    -- das machte Überwucherungs-Boden (10 Eier) zu 8780 und Eier zum besten Einsatz.
+    ["biter-egg"] = 15,
 
     -- Samen: 2 % Ausbeute aus einer Frucht ergab ~126, das ist viel zu viel
     -- (zum Vergleich: Baumsamen ~5,5). Als Grundwert sind sie ein günstiges Nebenprodukt.
@@ -66,7 +73,8 @@ return {
     ["metallic-asteroid-chunk"] = 5,
     ["carbonic-asteroid-chunk"] = 5,
     ["oxide-asteroid-chunk"] = 5,
-    ["promethium-asteroid-chunk"] = 165,
+    -- Selten und weit draußen, aber abgebaut wie die anderen Brocken
+    ["promethium-asteroid-chunk"] = 30,
   },
 
   fluid = {

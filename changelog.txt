@@ -1,4 +1,17 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.24.0
+Date: 2026-10-07
+  Balancing:
+    - Biter eggs are worth 15 instead of 165: a captive spawner lays them nonstop for a bit of
+      bioflux. This fixes overgrowth soil (8780 -> 1302), biolab (12.6k -> 5.2k) and the captive
+      biter spawner (14.2k -> 5.9k), and eggs are no longer the best stake.
+    - Promethium asteroid chunks are worth 30 instead of 165.
+    - Promethium science packs have a minimum value of 1500 (was 3290), about twice the
+      cryogenic science pack.
+    - Quantum processors have a minimum value of 1000 (was 650): their ingredients are cheap, but
+      they need Aquilo, the cryogenic plant and fluoroketone. Railgun, fusion reactor and fusion
+      generator get more expensive accordingly.
+---------------------------------------------------------------------------------------------------
 Version: 0.23.0
 Date: 2026-10-07
   Features:
