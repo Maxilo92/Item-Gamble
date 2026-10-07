@@ -1,4 +1,10 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.11.2
+Date: 2026-10-07
+  Changes:
+    - Items with a minimum value now show the earliest way to make them (space science pack
+      showed the research time of the Aquilo ice route instead of the asteroid route).
+---------------------------------------------------------------------------------------------------
 Version: 0.11.1
 Date: 2026-10-07
   Changes:

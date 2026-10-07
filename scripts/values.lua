@@ -293,7 +293,10 @@ local function relax(recipes, excluded, state, credit_material, machines, weight
               m = floor / factor
             end
             local current = value[target.key]
-            if candidate > 0 and (not current or candidate < current * (1 - EPSILON)) then
+            -- Gleicher Wert (Mindestwert) mit früher erreichbarem Weg zählt auch als Verbesserung
+            local better = not current or candidate < current * (1 - EPSILON)
+              or (floor and candidate <= current * (1 + EPSILON) and reached < progress[target.key] - EPSILON)
+            if candidate > 0 and better then
               value[target.key] = candidate
               material[target.key] = m
               progress[target.key] = reached
