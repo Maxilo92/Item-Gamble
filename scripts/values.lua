@@ -39,14 +39,16 @@ local function prototype_exists(type, name)
 end
 
 local function ignore_reason(recipe)
-  if recipe.hidden or recipe.is_parameter or recipe.parameter then
+  if recipe.hidden or recipe.parameter then
     return "hidden"
   end
   if base.ignored_recipes[recipe.name] then
     return "list"
   end
-  if base.ignored_categories[recipe.category] then
-    return "category"
+  for _, category in pairs(recipe.categories) do
+    if base.ignored_categories[category] then
+      return "category"
+    end
   end
   if recipe.subgroup and base.ignored_subgroups[recipe.subgroup.name] then
     return "subgroup"
@@ -68,7 +70,10 @@ local function parse_recipe(recipe)
   local order = {}
   for _, product in pairs(recipe.products) do
     local amount = product.amount or (product.amount_min + product.amount_max) / 2
-    local expected = amount * (product.probability or 1) + (product.extra_count_fraction or 0)
+    -- 2.1: Wahrscheinlichkeit = eigener Wurf × Anteil am gemeinsamen Wurf
+    local shared = product.shared_probability
+    local probability = product.independent_probability * (shared.max - shared.min)
+    local expected = amount * probability + (product.extra_count_fraction or 0)
     if expected > 0 then
       local k = key(product.type, product.name)
       local out = outputs[k]
@@ -213,20 +218,22 @@ local function crafting_machines()
   return by_category
 end
 
--- Fortschritt des frühesten Gebäudes, das die Kategorie herstellt. nil, solange
--- noch keins einen Wert hat (oder es gar keins gibt).
-local function machine_progress(machines, progress)
-  if not machines then
-    return nil
-  end
-  if machines.hand then
-    return 0
-  end
+-- Fortschritt des frühesten Gebäudes, das eine der Kategorien herstellt. nil,
+-- solange noch keins einen Wert hat (oder es gar keins gibt).
+local function machine_progress(by_category, categories, progress)
   local best
-  for _, item in ipairs(machines.items) do
-    local p = progress[item]
-    if p and (not best or p < best) then
-      best = p
+  for _, category in pairs(categories) do
+    local machines = by_category[category]
+    if machines then
+      if machines.hand then
+        return 0
+      end
+      for _, item in ipairs(machines.items) do
+        local p = progress[item]
+        if p and (not best or p < best) then
+          best = p
+        end
+      end
     end
   end
   return best
@@ -261,7 +268,7 @@ local function relax(recipes, excluded, state, credit_material, machines, weight
     for _, recipe in ipairs(recipes) do
       if not excluded[recipe.name] then
         local cost = recipe.time * base.time_value
-        local reached = machine_progress(machines[recipe.category], progress)
+        local reached = machine_progress(machines, recipe.categories, progress)
         local complete = reached ~= nil
         if complete then
           reached = math.max(reached, recipe.research)
@@ -351,7 +358,7 @@ function values.rebuild()
     else
       local parsed = parse_recipe(recipe)
       if parsed then
-        parsed.category = recipe.category
+        parsed.categories = recipe.categories
         -- Nie per Technologie freigeschaltet (z.B. per Skript anderer Mods): zählt wie von Anfang an da
         parsed.research = recipe.enabled and 0 or unlock[recipe.name] or 0
         recipes[#recipes + 1] = parsed

@@ -89,8 +89,7 @@ return {
 
   -- Rezepte, die nie für Werte zählen
   ignored_categories = {
-    ["recycling"] = true,
-    ["recycling-or-hand-crafting"] = true, -- Schrott-Recycling, sonst wird alles fast gratis
+    ["recycling"] = true, -- auch Schrott-Recycling, sonst wird alles fast gratis
   },
   -- Fässer füllen zählt (gefülltes Fass = Fass + Flüssigkeit), Leeren nicht:
   -- sonst bekäme die Flüssigkeit ihren Wert aus dem Fass und umgekehrt.

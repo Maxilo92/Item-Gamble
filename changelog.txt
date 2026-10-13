@@ -1,4 +1,12 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.25.0
+Date: 2026-10-13
+  Changes:
+    - Updated for Factorio 2.1. Recipes now have several categories: a recipe counts as craftable
+      as soon as a machine for any of them is available, and recycling is still ignored.
+    - Product chances use the new independent and shared probabilities, so recycling-style and
+      asteroid crushing yields keep being valued correctly.
+---------------------------------------------------------------------------------------------------
 Version: 0.24.0
 Date: 2026-10-07
   Balancing:

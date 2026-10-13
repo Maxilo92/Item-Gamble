@@ -1,6 +1,6 @@
 # Factorio Gamble Mod
 
-Factorio 2.0 Mod mit Space Age. Der Spieler setzt ein Item ein (bis zu 1 Stack), wählt ein Zielitem plus Menge, und ein Glücksrad-Fenster entscheidet ob er gewinnt. Kommunikation mit dem User auf Deutsch, locker und kurz. Er reagiert lieber auf Zwischenstände als alles vorher festzulegen.
+Factorio 2.1 Mod mit Space Age (seit 0.25.0, vorher 2.0). Der Spieler setzt ein Item ein (bis zu 1 Stack), wählt ein Zielitem plus Menge, und ein Glücksrad-Fenster entscheidet ob er gewinnt. Kommunikation mit dem User auf Deutsch, locker und kurz. Er reagiert lieber auf Zwischenstände als alles vorher festzulegen.
 
 ## Spielregeln (entschieden)
 
@@ -63,7 +63,7 @@ Ergebnis wird **vor** der Animation festgelegt, die Animation ist nur Show. Zust
 
 ## Technik
 
-- Factorio 2.0 API, `info.json` mit Abhängigkeit auf `space-age`
+- Factorio 2.1 API (`factorio_version` 2.1), `info.json` mit Abhängigkeit auf `space-age`. 2.1 hat u.a. `recipe.category` → `recipe.categories` (Liste), `product.probability` → `independent_probability` × (`shared_probability.max` − `.min`), `is_parameter` → `parameter` umgestellt; Breaking Changes stehen in `data/changelog.txt` der Installation
 - 2.0 nutzt das globale `prototypes` (nicht mehr `game.item_prototypes`) und `storage` (nicht mehr `global`)
 - API vor Benutzung gegen https://lua-api.factorio.com/latest/ prüfen, nicht aus dem Gedächtnis raten
 - Mod-Ordner unter Windows: `%APPDATA%\Factorio\mods\`
