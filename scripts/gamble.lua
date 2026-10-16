@@ -1,11 +1,15 @@
--- Spiellogik ohne GUI: Einsatz, Chance, Dreh, Auszahlung.
+-- Spiellogik ohne GUI: Konto, Einwechseln, Chance, Dreh, Auszahlung.
 --
--- Einsatz und Gewinn liegen in eigenen Script-Inventaren (game.create_inventory) und
--- werden im Glücksrad-Fenster als Slots angezeigt, die sich wie Vanilla-Slots bedienen
--- lassen. Der Einsatz ist ein Slot, also höchstens ein Stack.
--- Der Einsatz-Slot ist ein Vorrat: pro Dreh wird die eingestellte Menge mal
--- Multiplikator eingesetzt, so kann man nach einer Niete sofort weiterdrehen. Gewinne
--- landen im Gewinn-Bereich, der mit dem möglichen Gewinn wächst (fit_output).
+-- Gespielt wird mit Coins wie mit Casino-Chips. Sie liegen als Zahl auf einem Konto pro
+-- Spieler (data.coins), nicht als Item, und bleiben auch bei geschlossenem Fenster.
+-- Items legt man in den Wechsel-Slot und wechselt sie zum Wechselkurs ein; Coins
+-- lassen sich nicht zurücktauschen, man kann mit ihnen nur drehen.
+-- Pro Dreh setzt man die eingestellten Coins mal Multiplikator ein. Gewinne sind Items
+-- und landen im Gewinn-Bereich, der mit dem Gewinn wächst (fit_output); Trostpreise
+-- sind Coins und gehen aufs Konto.
+--
+-- Wechsel-Slot und Gewinn-Bereich sind eigene Script-Inventare (game.create_inventory),
+-- im Fenster als Slots angezeigt, die sich wie Vanilla-Slots bedienen lassen.
 
 local values = require("scripts.values")
 local reel = require("scripts.reel")
@@ -56,12 +60,43 @@ local function migrate(player_index, data)
   data.window_inventory = nil
 end
 
+-- Der Einsatz-Slot bis 0.25.0 ist jetzt der Wechsel-Slot, sein Inhalt bleibt liegen
+local function migrate_exchange_slot(data)
+  if data.stake_inventory then
+    data.exchange_inventory = data.exchange_inventory or data.stake_inventory
+    data.stake_inventory = nil
+  end
+end
+
+-- Bis 0.25.0 war der Einsatz ein Item. Offene Freispins behalten ihre Chance und
+-- setzen den Einsatzwert als Coins (sie kosten ja nichts), die Statistik zählte
+-- Itemwerte statt Coins und fängt neu an.
+local function migrate_to_coins(data)
+  if data.coins then
+    return
+  end
+  data.coins = 0
+  data.stats = nil
+  data.last = nil
+  data.stake_count = nil
+  data.stake_key = nil
+  for _, bet in ipairs(data.freespins or {}) do
+    if bet.stake then
+      bet.coins = math.max(1, math.floor((bet.stake_value or 1) + 0.5))
+      bet.stake = nil
+      bet.stake_value = nil
+    end
+  end
+end
+
 function gamble.init()
   storage.players = storage.players or {}
   storage.rng = storage.rng or game.create_random_generator()
   storage.spins = storage.spins or {}
   for player_index, data in pairs(storage.players) do
     migrate(player_index, data)
+    migrate_exchange_slot(data)
+    migrate_to_coins(data)
     data.elems = nil
     data.picker = nil
     -- Walzenplan aus älterer Version ohne Dauer: im nächsten Tick auflösen
@@ -74,11 +109,12 @@ end
 function gamble.get(player_index)
   local data = storage.players[player_index]
   if not data then
-    data = { count = 1, stake_count = 1 }
+    data = { count = 1, coins = 0 }
     storage.players[player_index] = data
   end
-  if not (data.stake_inventory and data.stake_inventory.valid) then
-    data.stake_inventory = game.create_inventory(1)
+  migrate_exchange_slot(data)
+  if not (data.exchange_inventory and data.exchange_inventory.valid) then
+    data.exchange_inventory = game.create_inventory(1)
   end
   local output = data.output_inventory
   if not (output and output.valid) then
@@ -141,9 +177,10 @@ local function has_equipment(stack)
   return item ~= nil and item.grid ~= nil and item.grid.count() > 0
 end
 
--- Einsatz und nicht abgeholter Gewinn zurück ins Inventar, Rest auf den Boden
+-- Nicht eingewechselte Items und nicht abgeholter Gewinn zurück ins Inventar, Rest
+-- auf den Boden. Die Coins bleiben auf dem Konto.
 function gamble.return_items(player, data)
-  for _, inventory in pairs({ data.stake_inventory, data.output_inventory }) do
+  for _, inventory in pairs({ data.exchange_inventory, data.output_inventory }) do
     if inventory and inventory.valid then
       for i = 1, #inventory do
         local slot = inventory[i]
@@ -160,17 +197,43 @@ local function same_item(a, b)
   return a.name == b.name and a.quality.name == b.quality.name
 end
 
--- Liegt eine andere Sorte im Einsatz-Slot als beim letzten Mal, wird die Einsatzmenge
--- auf den ganzen Vorrat gesetzt - wie beim Einlegen eines Stacks erwartet.
-function gamble.track_stake(data)
-  local slot = data.stake_inventory[1]
-  local key = slot.valid_for_read and (slot.name .. "/" .. slot.quality.name) or nil
-  if key ~= data.stake_key then
-    data.stake_key = key
-    if key then
-      data.stake_count = slot.count
-    end
+-- ── Konto ───────────────────────────────────────────────────────────────────
+
+-- Ganze Coins auf dem Konto. Intern zählen auch Bruchteile (ein Holz bringt einen
+-- Viertel-Coin), gesetzt werden nur ganze.
+function gamble.balance(data)
+  return math.floor((data.coins or 0) + 1e-9)
+end
+
+-- Was der Wechsel-Slot gerade einbringt: coins, problem. problem ist nil,
+-- "empty", "no-value" oder "equipment".
+function gamble.exchange_offer(data)
+  local slot = data.exchange_inventory[1]
+  if not slot.valid_for_read then
+    return nil, "empty"
   end
+  if has_equipment(slot) then
+    return nil, "equipment"
+  end
+  local coins = values.is_selectable(slot.name)
+    and values.coins(slot.name, slot.quality.name, slot.count, slot.spoil_percent)
+  if not coins or coins <= 0 then
+    return nil, "no-value"
+  end
+  return coins, nil
+end
+
+-- Wechselt den ganzen Wechsel-Slot ein. Gibt die gutgeschriebenen Coins zurück.
+function gamble.exchange(data)
+  local coins = gamble.exchange_offer(data)
+  if not coins then
+    return nil
+  end
+  data.exchange_inventory[1].clear()
+  data.coins = (data.coins or 0) + coins
+  local stats = gamble.stats(data)
+  stats.exchanged = (stats.exchanged or 0) + coins
+  return coins
 end
 
 -- Gewinn-Bereich ins Inventar räumen: alles, oder mit like nur die Sorte (Item und
@@ -254,8 +317,8 @@ end
 -- Klick auf einen Slot des eigenen Inventars im Fenster, wie im Spiel:
 --   Links:        aufnehmen (der Slot wird mit der Hand markiert), ablegen, tauschen
 --   Rechts:       halben Stack aufnehmen / ein Item ablegen
---   Shift:        Stack in den Einsatz (Shift+Rechts: die Hälfte)
---   Strg:         alle Items dieser Sorte in den Einsatz, bis der Stack voll ist
+--   Shift:        Stack in den Wechsel-Slot (Shift+Rechts: die Hälfte)
+--   Strg:         alle Items dieser Sorte in den Wechsel-Slot, bis der Stack voll ist
 function gamble.click_inventory(player, data, index, event)
   local inventory = player.get_main_inventory()
   local cursor = player.cursor_stack
@@ -264,10 +327,10 @@ function gamble.click_inventory(player, data, index, event)
   end
   local slot = inventory[index]
   local right = event.button == defines.mouse_button_type.right
-  local stake = data.stake_inventory[1]
+  local exchange = data.exchange_inventory[1]
 
   if event.shift or event.control then
-    if not slot.valid_for_read or (stake.valid_for_read and not same_item(stake, slot)) then
+    if not slot.valid_for_read or (exchange.valid_for_read and not same_item(exchange, slot)) then
       return
     end
     if event.control then
@@ -275,11 +338,11 @@ function gamble.click_inventory(player, data, index, event)
       for i = 1, #inventory do
         local stack = inventory[i]
         if stack.valid_for_read and stack.name == name and stack.quality.name == quality then
-          stake.transfer_stack(stack)
+          exchange.transfer_stack(stack)
         end
       end
     else
-      stake.transfer_stack(slot, right and math.ceil(slot.count / 2) or nil)
+      exchange.transfer_stack(slot, right and math.ceil(slot.count / 2) or nil)
     end
     return
   end
@@ -317,31 +380,14 @@ local function output_accepts(data, target)
 end
 
 -- Alles, was das Fenster anzeigt und der Dreh braucht.
--- problem: nil oder "no-stake", "stake-no-value", "stake-equipment", "no-target",
--- "target-no-value", "output-blocked" (Gewinn-Slot belegt), "lower" (Ziel billiger
--- als Einsatz) oder "below-min".
+-- problem: nil oder "no-coins", "no-target", "target-no-value", "output-blocked"
+-- (Gewinn-Bereich voll), "lower" (Ziel weniger als ein Coin wert) oder "below-min".
+--
+-- Einsatz in Coins pro Dreh: die eingestellte Zahl (data.stake_coins), ohne
+-- Einstellung das Höchstmögliche. Höchstens so viel, wie das Ziel wert ist - mehr
+-- brächte keine bessere Chance als das Maximum - und höchstens das Konto.
 function gamble.evaluate(data)
-  local state = {}
-
-  local slot = data.stake_inventory[1]
-  if slot.valid_for_read then
-    -- Pro Dreh eingesetzt wird die eingestellte Menge, höchstens der ganze Vorrat
-    local count = math.max(1, math.min(math.floor(data.stake_count or 1), slot.count))
-    state.stake = {
-      name = slot.name,
-      quality = slot.quality.name,
-      count = count,
-      available = slot.count,
-      spoil = slot.spoil_percent,
-    }
-    -- Der Multiplikator vervielfacht Einsatz und Gewinn eines Drehs, soweit der Vorrat reicht.
-    -- Die Chance bleibt gleich, beide Seiten wachsen im selben Verhältnis.
-    state.max_multi = math.max(1, math.min(gamble.MAX_MULTI, math.floor(slot.count / count)))
-    state.multi = math.max(1, math.min(math.floor(data.multi or 1), state.max_multi))
-    if values.is_selectable(slot.name) and not has_equipment(slot) then
-      state.stake_value = values.stack(slot.name, slot.quality.name, count, slot.spoil_percent)
-    end
-  end
+  local state = { balance = gamble.balance(data) }
 
   local target = data.target
   if target then
@@ -355,18 +401,31 @@ function gamble.evaluate(data)
     end
   end
 
-  if not state.stake then
-    state.problem = "no-stake"
-  elseif not state.stake_value then
-    state.problem = has_equipment(slot) and "stake-equipment" or "stake-no-value"
+  local max_stake = state.balance
+  if state.target_value then
+    max_stake = math.min(max_stake, math.floor(state.target_value + 1e-9))
+  end
+  if max_stake >= 1 then
+    state.max_stake = max_stake
+    state.stake = math.max(1, math.min(math.floor(data.stake_coins or max_stake), max_stake))
+    -- Der Multiplikator vervielfacht Einsatz und Gewinn eines Drehs, soweit das Konto
+    -- reicht. Die Chance bleibt gleich, beide Seiten wachsen im selben Verhältnis.
+    state.max_multi = math.max(1, math.min(gamble.MAX_MULTI, math.floor(state.balance / state.stake)))
+    state.multi = math.max(1, math.min(math.floor(data.multi or 1), state.max_multi))
+  end
+
+  if state.balance < 1 then
+    state.problem = "no-coins"
   elseif not target then
     state.problem = "no-target"
   elseif not state.target_value then
     state.problem = "target-no-value"
   elseif not output_accepts(data, target) then
     state.problem = "output-blocked"
+  elseif not state.stake then
+    state.problem = "lower"
   else
-    local chance, ratio, reason = values.chance(state.stake_value, state.target_value)
+    local chance, ratio, reason = values.chance(state.stake, state.target_value)
     state.chance, state.ratio, state.problem = chance, ratio, reason
   end
   state.ok = state.problem == nil
@@ -379,19 +438,19 @@ end
 -- er gewonnen wurde (Einsatz, Ziel, Menge, Chance, Multiplikator), nur ohne Kosten -
 -- sonst könnte man Freispins mit billigen Wetten sammeln und auf teure umschalten.
 -- Wie am Spielautomaten bringt ein ×N-Dreh ×N-Freispins; gewürfelt wird dafür nur
--- einmal, so ist ein Freispin pro eingesetztem Item bei jedem Multiplikator gleich viel
+-- einmal, so ist ein Freispin pro eingesetztem Coin bei jedem Multiplikator gleich viel
 -- wert.
 --
--- Balance: Eine Wette bringt im Schnitt Maximum × Wertfaktor (Standard 50 %) des
--- Einsatzwerts zurück, ein Freispin ist so viel wert. Bei Freispin-Chance p und
--- Nachtriggern kommt man auf etwa 50 % ÷ (1 - p): bei 5 % rund 52,6 %. Die
--- Einstellung ist auf 25 % begrenzt, damit das nie Pari erreicht.
+-- Balance: Ein Coin bringt am Tisch im Schnitt Maximum × Wertfaktor (Standard 50 %)
+-- seines Werts als Items zurück, beim Einwechseln bekommt man Kurs × Wert Coins
+-- (Standard 45 %). Vom eingewechselten Wert kommen so 22,5 % zurück, Freispins heben
+-- das auf etwa 22,5 % ÷ (1 - p), bei 5 % rund 23,7 %, Trostpreise um gut 1 % der
+-- eingesetzten Coins. Gemessen: 24-26 %. Die Freispin-Chance ist auf 25 % begrenzt.
 
 gamble.MAX_FREESPINS = 100   -- mehr sammeln sich nicht an
 
 local function same_bet(a, b)
-  return a.stake.name == b.stake.name and a.stake.quality == b.stake.quality
-    and a.stake.count == b.stake.count and a.name == b.name and a.quality == b.quality
+  return a.coins == b.coins and a.name == b.name and a.quality == b.quality
     and a.count == b.count and (a.multi or 1) == (b.multi or 1) and math.abs(a.chance - b.chance) < 1e-9
 end
 
@@ -416,8 +475,7 @@ local function add_freespins(data, bet, count)
     end
   end
   data.freespins[#data.freespins + 1] = {
-    stake = { name = bet.stake.name, quality = bet.stake.quality, count = bet.stake.count },
-    stake_value = bet.stake_value,
+    coins = bet.coins,
     name = bet.name,
     quality = bet.quality,
     count = bet.count,
@@ -433,7 +491,7 @@ function gamble.next_freespin(data)
   local queue = data.freespins
   while queue and queue[1] do
     local bet = queue[1]
-    if bet.left > 0 and prototypes.item[bet.name] and prototypes.item[bet.stake.name] then
+    if bet.left > 0 and prototypes.item[bet.name] and bet.coins then
       return bet
     end
     table.remove(queue, 1)
@@ -442,9 +500,9 @@ function gamble.next_freespin(data)
 end
 
 -- Startet einen Dreh. Liegen Freispins an, wird zuerst einer davon gespielt, sonst
--- ist der Einsatz sofort weg. Das Ergebnis steht sofort fest und liegt in data.spin.
--- Ausgezahlt wird erst in gamble.finish, wenn die Walze steht - sonst verriete das
--- Inventar daneben den Gewinn vorher.
+-- gehen die Coins sofort vom Konto. Das Ergebnis steht sofort fest und liegt in
+-- data.spin. Ausgezahlt wird erst in gamble.finish, wenn die Walze steht - sonst
+-- verriete das Inventar daneben den Gewinn vorher.
 function gamble.spin(player, data)
   if data.spin then
     return
@@ -460,8 +518,7 @@ function gamble.spin(player, data)
       table.remove(data.freespins, 1)
     end
     bet = {
-      stake = free.stake,
-      stake_value = free.stake_value,
+      coins = free.coins,
       name = free.name,
       quality = free.quality,
       count = free.count,
@@ -474,16 +531,9 @@ function gamble.spin(player, data)
     if not state.ok then
       return
     end
-    local slot = data.stake_inventory[1]
-    local spent = state.stake.count * state.multi
-    if spent >= slot.count then
-      slot.clear()
-    else
-      slot.count = slot.count - spent
-    end
+    data.coins = data.coins - state.stake * state.multi
     bet = {
-      stake = state.stake,
-      stake_value = state.stake_value,
+      coins = state.stake,
       name = data.target.name,
       quality = data.target.quality,
       count = state.count,
@@ -498,7 +548,7 @@ function gamble.spin(player, data)
   local rng = storage.rng
   local density = settings.global["item-gamble-consolation-chance"].value
   local freespin_chance = settings.global["item-gamble-freespin-chance"].value
-  local pick = values.prize_picker(rng, bet.stake_value)
+  local pick = values.prize_picker(rng, bet.coins)
   local won = rng() < bet.chance
   local prize, freespins = nil, 0
   if not won then
@@ -520,7 +570,7 @@ function gamble.spin(player, data)
   end
   local prizes = {}
   if prize then
-    prizes[1] = { name = prize.name, quality = prize.quality, count = prize.count * multi }
+    prizes[1] = { coins = prize.coins * multi }
   end
   data.last = nil
   data.spin = {
@@ -534,7 +584,7 @@ function gamble.spin(player, data)
     name = bet.name,
     quality = bet.quality,
     count = bet.count * multi,
-    stake = bet.stake,
+    coins = bet.coins * multi,
     frame = 0,
     reel = plan,
     prizes = prizes,
@@ -544,9 +594,10 @@ end
 
 -- ── Statistik ───────────────────────────────────────────────────────────────
 --
--- Pro Spieler: eingesetzter und zurückgewonnener Wert, Drehs, Gewinne, Freispins und
--- der wertvollste Treffer. Eingesetzt zählt nur, was bezahlt wurde (Freispins kosten
--- nichts), zurück zählen Gewinne und Trostpreise. Das Verhältnis zeigt den Hausvorteil.
+-- Pro Spieler in Coins: eingewechselt, eingesetzt, zurück, dazu Drehs, Gewinne,
+-- Freispins und der wertvollste Treffer. Eingesetzt zählt nur, was bezahlt wurde
+-- (Freispins kosten nichts). Zurück zählen Trostpreise und Gewinne zu dem, was sie
+-- beim Einwechseln brächten - so zeigt das Verhältnis den ganzen Hausvorteil.
 
 function gamble.stats(data)
   data.stats = data.stats or { staked = 0, returned = 0, spins = 0, wins = 0, freespins = 0 }
@@ -557,8 +608,8 @@ function gamble.reset_stats(data)
   data.stats = nil
 end
 
-local function item_value(stack)
-  return values.is_selectable(stack.name) and values.stack(stack.name, stack.quality, stack.count) or 0
+local function item_coins(stack)
+  return values.is_selectable(stack.name) and values.coins(stack.name, stack.quality, stack.count) or 0
 end
 
 local function record_stats(data, result, wins, prizes)
@@ -567,19 +618,19 @@ local function record_stats(data, result, wins, prizes)
   if result.free then
     stats.freespins = stats.freespins + 1
   elseif result.bet then
-    stats.staked = stats.staked + result.bet.stake_value * (result.multi or 1)
+    stats.staked = stats.staked + (result.bet.coins or 0) * (result.multi or 1)
   end
   if wins > 0 then
     stats.wins = stats.wins + 1
     local hit = { name = result.name, quality = result.quality, count = result.count * wins }
-    hit.value = item_value(hit)
+    hit.value = item_coins(hit)
     stats.returned = stats.returned + hit.value
     if not stats.best or hit.value > stats.best.value then
       stats.best = hit
     end
   end
   for _, prize in ipairs(prizes) do
-    stats.returned = stats.returned + item_value(prize)
+    stats.returned = stats.returned + (prize.coins or item_coins(prize))
   end
 end
 
@@ -596,8 +647,8 @@ function gamble.finish(player, data)
   if (result.freespins or 0) > 0 and result.bet then
     add_freespins(data, result.bet, result.freespins)
   end
-  -- Gewinne und Trostpreise in den Gewinn-Bereich; was nicht passt (z.B. Abbruch beim
-  -- Schließen, viele Drehs), ins Inventar, der Rest auf den Boden
+  -- Gewinne in den Gewinn-Bereich; was nicht passt (z.B. Abbruch beim Schließen),
+  -- ins Inventar, der Rest auf den Boden. Trostpreise sind Coins fürs Konto.
   local function pay(paid)
     local stack = { name = paid.name, quality = paid.quality, count = paid.count }
     grow_output(data.output_inventory, stack)
@@ -617,7 +668,12 @@ function gamble.finish(player, data)
   result.prizes = prizes
   result.prize_spilled = 0
   for _, prize in ipairs(prizes) do
-    result.prize_spilled = result.prize_spilled + pay(prize)
+    if prize.coins then
+      data.coins = (data.coins or 0) + prize.coins
+    else
+      -- Item-Trostpreis eines Drehs, der vor 0.26.0 begonnen hat
+      result.prize_spilled = result.prize_spilled + pay(prize)
+    end
   end
   record_stats(data, result, wins, prizes)
   data.last = result
@@ -627,7 +683,7 @@ end
 function gamble.remove_player(player_index)
   local data = storage.players[player_index]
   if data then
-    for _, key in pairs({ "stake_inventory", "output_inventory" }) do
+    for _, key in pairs({ "exchange_inventory", "stake_inventory", "output_inventory" }) do
       if data[key] and data[key].valid then
         data[key].destroy()
       end

@@ -1,4 +1,33 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.26.1
+Date: 2026-10-16
+  Info:
+    - Same as 0.26.0, packed for Factorio 2.0.
+---------------------------------------------------------------------------------------------------
+Version: 0.26.0
+Date: 2026-10-16
+  Features:
+    - Coins: you no longer stake items directly. Like chips in a casino, items are exchanged for
+      coins first, and coins are what you bet. They sit on an account per player, not as items,
+      and stay there when the window closes.
+    - Exchange slot (formerly the stake slot): put items in, the button shows how many coins they
+      bring, one click exchanges them. Coins cannot be exchanged back.
+    - Stake row in coins per spin, at most the target value and your balance. Picking a new target
+      sets the stake to the best chance again.
+    - Consolation prizes are coins (a tenth or a hundredth of the stake) and go to the account.
+  Balancing:
+    - New setting exchange rate, 0.45 by default: items bring 45 % of their value as coins. With
+      the best chance of 50 % at the table, free spins and consolation prizes, about a quarter of
+      the exchanged value comes back on average (was about half), measured over 120,000 spins.
+    - Minimum chance 0.000005 (was 0.00001), so 1 red science pack exchanged and bet on 100
+      promethium science packs stays just above it.
+  Changes:
+    - Statistics count coins. Prizes count with the coins they would bring when exchanged, so the
+      ratio shows the whole house edge. Statistics from older versions start over.
+    - Pending free spins keep their chance and become coin bets. Items left in the old stake slot
+      stay in the exchange slot.
+    - The same code runs on Factorio 2.0 and 2.1.
+---------------------------------------------------------------------------------------------------
 Version: 0.25.0
 Date: 2026-10-13
   Changes:

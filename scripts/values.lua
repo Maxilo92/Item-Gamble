@@ -38,14 +38,44 @@ local function prototype_exists(type, name)
   return prototypes.fluid[name] ~= nil
 end
 
+-- Dieselbe Mod läuft auf Factorio 2.0 und 2.1. Was sich an Rezepten geändert hat:
+-- 2.1 hat eine Kategorienliste statt einer Kategorie, `parameter` statt `is_parameter`
+-- und zwei Wahrscheinlichkeiten pro Produkt. Unbekannte Felder eines Prototyps
+-- abzufragen ist ein Fehler, deshalb vorher nach der Version unterscheiden.
+local IS_21 = helpers.compare_versions(script.active_mods["base"], "2.1.0") >= 0
+
+local function recipe_categories(recipe)
+  if IS_21 then
+    return recipe.categories
+  end
+  return { recipe.category }
+end
+
+local function is_parameter(recipe)
+  if IS_21 then
+    return recipe.parameter
+  end
+  return recipe.is_parameter
+end
+
+-- Erwarteter Anteil eines Produkts. 2.1: eigener Wurf × Anteil am gemeinsamen Wurf
+local function product_probability(product)
+  if product.independent_probability then
+    local shared = product.shared_probability
+    local range = shared and (shared.max - shared.min) or 1
+    return product.independent_probability * range
+  end
+  return product.probability or 1
+end
+
 local function ignore_reason(recipe)
-  if recipe.hidden or recipe.parameter then
+  if recipe.hidden or is_parameter(recipe) then
     return "hidden"
   end
   if base.ignored_recipes[recipe.name] then
     return "list"
   end
-  for _, category in pairs(recipe.categories) do
+  for _, category in pairs(recipe_categories(recipe)) do
     if base.ignored_categories[category] then
       return "category"
     end
@@ -70,10 +100,7 @@ local function parse_recipe(recipe)
   local order = {}
   for _, product in pairs(recipe.products) do
     local amount = product.amount or (product.amount_min + product.amount_max) / 2
-    -- 2.1: Wahrscheinlichkeit = eigener Wurf × Anteil am gemeinsamen Wurf
-    local shared = product.shared_probability
-    local probability = product.independent_probability * (shared.max - shared.min)
-    local expected = amount * probability + (product.extra_count_fraction or 0)
+    local expected = amount * product_probability(product) + (product.extra_count_fraction or 0)
     if expected > 0 then
       local k = key(product.type, product.name)
       local out = outputs[k]
@@ -358,7 +385,7 @@ function values.rebuild()
     else
       local parsed = parse_recipe(recipe)
       if parsed then
-        parsed.categories = recipe.categories
+        parsed.categories = recipe_categories(recipe)
         -- Nie per Technologie freigeschaltet (z.B. per Skript anderer Mods): zählt wie von Anfang an da
         parsed.research = recipe.enabled and 0 or unlock[recipe.name] or 0
         recipes[#recipes + 1] = parsed
@@ -488,48 +515,41 @@ function values.is_selectable(name)
     and values.unit("item", name) ~= nil
 end
 
--- Trostpreise: Fabrik für Preise, die ein Zehntel oder Hundertstel des Einsatzwerts
--- wert sind. Jeder Aufruf der zurückgegebenen Funktion würfelt einen Preis
--- {name, quality, count}, nil wenn nichts so Billiges existiert. Die Liste ist
--- nach Namen sortiert, damit die Würfe in jeder Mehrspielerinstanz gleich ausgehen.
-local PRIZE_BAND = 20   -- Preise bevorzugt aus höchstens so vielen Stück pro Einsatzbruchteil
-function values.prize_picker(rng, stake_value)
-  local pool = {}
-  for k, unit in pairs(storage.values.value) do
-    local name = k:match("^item/(.+)$")
-    if name and unit > 0 and values.is_selectable(name) then
-      pool[#pool + 1] = { name = name, unit = unit }
-    end
-  end
-  table.sort(pool, function(a, b) return a.name < b.name end)
+-- ── Coins ──────────────────────────────────────────────────────────────────
+--
+-- Gespielt wird mit Coins, die auf einem Konto pro Spieler liegen. Items wechselt
+-- man zum Wechselkurs ein (Coins = Wert × Kurs), zurück geht es nicht. Am Tisch zählt
+-- ein Coin so viel wie eine Werteinheit (ein Eisenerz).
+
+function values.exchange_rate()
+  return settings.global["item-gamble-exchange-rate"].value
+end
+
+-- Coins für einen Stack beim Einwechseln, nil ohne Wert
+function values.coins(name, quality, count, spoil_percent)
+  local value = values.stack(name, quality, count, spoil_percent)
+  return value and value * values.exchange_rate()
+end
+
+-- Trostpreise: Fabrik für Coin-Beträge von einem Zehntel oder Hundertstel des
+-- Einsatzes. Jeder Aufruf würfelt einen Preis {coins = n}, nil wenn das weniger als
+-- ein Coin wäre - sonst brächten Ein-Coin-Einsätze ihren Einsatz zu oft zurück.
+function values.prize_picker(rng, stake)
   return function()
-    local budget = stake_value * (rng() < 0.5 and 0.1 or 0.01)
-    local band, cheap = {}, {}
-    for _, item in ipairs(pool) do
-      if item.unit <= budget then
-        cheap[#cheap + 1] = item
-        if item.unit * PRIZE_BAND >= budget then
-          band[#band + 1] = item
-        end
-      end
-    end
-    local from = #band > 0 and band or cheap
-    if #from == 0 then
+    local coins = math.floor(stake * (rng() < 0.5 and 0.1 or 0.01))
+    if coins < 1 then
       return nil
     end
-    local item = from[rng(1, #from)]
-    local count = math.floor(budget / item.unit + 0.5)
-    count = math.max(1, math.min(count, prototypes.item[item.name].stack_size))
-    return { name = item.name, quality = "normal", count = count }
+    return { coins = coins }
   end
 end
 
--- Gewinnchance für einen Einsatz- und einen Zielwert.
+-- Gewinnchance für einen Einsatz (Coins) und einen Zielwert.
 -- Gibt chance, r, grund zurück. grund ist nil, "no-value", "lower" (Ziel billiger
 -- als Einsatz, gesperrt) oder "below-min" (Chance unter der Minimalchance).
--- Gespielt wird immer um mehr als den vollen Einsatzwert ("lower" prüft r mit dem
--- vollen Wert), für die Chance zählt der Einsatz aber nur mit dem Einsatz-Wertfaktor.
--- Wie An- und Verkaufspreis: gleichwertiges Tauschen ist so kein sicheres Geschäft.
+-- Das Ziel muss mindestens so viel wert sein wie der Einsatz, für die Chance zählt
+-- der Einsatz aber nur mit dem Einsatz-Wertfaktor: Den Einsatz zum vollen Zielwert
+-- gibt es höchstens mit Maximum × Faktor (Standard 50 %).
 function values.chance(stake_value, target_value)
   if not stake_value or not target_value or stake_value <= 0 then
     return nil, nil, "no-value"

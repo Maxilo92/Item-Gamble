@@ -1,6 +1,16 @@
 data:extend({
   {
     type = "double-setting",
+    name = "item-gamble-exchange-rate",
+    setting_type = "runtime-global",
+    -- Mit Freispins und Trostpreisen kommt so im Schnitt ein Viertel zurück
+    default_value = 0.45,
+    minimum_value = 0.01,
+    maximum_value = 1,
+    order = "0",
+  },
+  {
+    type = "double-setting",
     name = "item-gamble-max-chance",
     setting_type = "runtime-global",
     default_value = 1,
@@ -21,7 +31,8 @@ data:extend({
     type = "double-setting",
     name = "item-gamble-min-chance",
     setting_type = "runtime-global",
-    default_value = 0.00001,
+    -- 1 rote Wissenschaft (als Coins) → 100 Promethium-Wissenschaft liegt knapp darüber
+    default_value = 0.000005,
     minimum_value = 0,
     maximum_value = 1,
     order = "b",

@@ -11,7 +11,8 @@ local debug_commands = {}
 local OUTPUT_FILE = "item-gamble/values.txt"
 local MAX_CHAT_LINES = 25
 
--- Sanity-Check aus dem Plan: soll ungefähr bei der Minimalchance landen
+-- Sanity-Check aus dem Plan: soll ungefähr bei der Minimalchance landen. Die rote
+-- Wissenschaft wird dafür eingewechselt und als Coins gesetzt.
 local SANITY_STAKE = { name = "automation-science-pack", count = 1 }
 local SANITY_TARGET = { name = "promethium-science-pack", count = 100 }
 
@@ -70,7 +71,7 @@ local function sorted_entries(type)
 end
 
 local function sanity()
-  local stake = values.stack(SANITY_STAKE.name, "normal", SANITY_STAKE.count)
+  local stake = values.coins(SANITY_STAKE.name, "normal", SANITY_STAKE.count)
   local target = values.stack(SANITY_TARGET.name, "normal", SANITY_TARGET.count)
   if not stake or not target then
     return nil
@@ -94,6 +95,7 @@ local function build_report()
 
   add("Item Gamble - Itemwerte (berechnet bei Tick " .. data.tick .. ")")
   add("Einheit: 1 = ein Eisenerz. Flüssigkeiten pro Einheit. Normale Qualität, frisch.")
+  add(string.format("Am Tisch zählt ein Coin 1, Einwechseln bringt %g Coins pro 1 Wert.", values.exchange_rate()))
   add(string.format("Spalten: Wert, Fortschrittsfaktor (Gewicht %g), Forschungszeit bis herstellbar, Name, Quelle.", weight))
   add(string.format("%d Rezepte genutzt, %d ignoriert (Recycling, Fässer, versteckt).",
     data.recipe_count, data.ignored_count))
@@ -101,7 +103,7 @@ local function build_report()
 
   local check = sanity()
   if check and check.chance then
-    add(string.format("Test: 1x %s -> 100x %s: Wertverhältnis %s, Chance %s%s",
+    add(string.format("Test: 1x %s (als Coins) -> 100x %s: Wertverhältnis %s, Chance %s%s",
       SANITY_STAKE.name, SANITY_TARGET.name, format_value(check.r), format_chance(check.chance),
       check.reason == "below-min" and " (unter der Minimalchance)" or ""))
     add("")

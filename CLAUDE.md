@@ -1,9 +1,10 @@
 # Factorio Gamble Mod
 
-Factorio 2.1 Mod mit Space Age (seit 0.25.0, vorher 2.0). Der Spieler setzt ein Item ein (bis zu 1 Stack), wählt ein Zielitem plus Menge, und ein Glücksrad-Fenster entscheidet ob er gewinnt. Kommunikation mit dem User auf Deutsch, locker und kurz. Er reagiert lieber auf Zwischenstände als alles vorher festzulegen.
+Factorio-Mod mit Space Age, derselbe Code für 2.0 und 2.1 (seit 0.26.0). Der Spieler wechselt Items in Coins (Konto pro Spieler, seit 0.26.0), setzt Coins auf ein Zielitem plus Menge, und ein Glücksrad-Fenster entscheidet ob er gewinnt. Kommunikation mit dem User auf Deutsch, locker und kurz. Er reagiert lieber auf Zwischenstände als alles vorher festzulegen.
 
 ## Spielregeln (entschieden)
 
+- **Seit 0.26.0:** Einsatz sind Coins (Casino-Chips) von einem Konto pro Spieler (`data.coins`, kein Item). Items wechselt man zum Wechselkurs ein, **zurücktauschen geht nicht** (User-Entscheidung, kein Shop). Die Regeln unten galten bis 0.25.0 für Items und gelten jetzt sinngemäß für Coins (1 Coin = 1 Werteinheit am Tisch)
 - Einsatz: beliebiges Item, maximal 1 Stack
 - Ziel: beliebiges Item + frei wählbare Menge, **maximal 1 Stack** (Stackgröße des Zielitems)
 - **Der Einsatz ist immer weg**, egal ob Gewinn oder Niete. Bei Gewinn gibt es das Ziel.
@@ -282,6 +283,18 @@ User: „balance alles“ (nach Sichtung seiner `values.txt`).
 - Bewusst gelassen: Fusions-Reaktor-Ausrüstung > Spidertron (250 Quantenprozessoren + Spaltreaktor gegen 2 Spaltreaktoren)
 - Kalibrierung bleibt erfüllt: 1 rot → 100 Promethium = 1:66.519, knapp über der Minimalchance
 - Vorgehen: neue Werte per Testkopie mit `commands_debug.write_report(nil)` im Headless-Lauf erzeugt und mit der `values.txt` des Users verglichen (Skript im Scratchpad). Klippensprengstoff weicht nur ab, weil eine Mod des Users die Forschung vorverlegt (6,4 h statt 73 h)
+
+### 0.26.0 / 0.26.1: Coins
+
+User: „noch ein wenig zu op“, will eine eigene Zwischenwährung wie Casino-Chips, die vorhandenen Coins (Vanilla-Item `coin`, versteckt), aber als Konto pro Spieler statt als Item. Nachgefragt und entschieden: Coins nur zum Spielen (kein Rücktausch, kein Shop), Rückfluss ~25 % (vorher ~52–56 %).
+
+- Ablauf: Wechsel-Slot (früher Einsatz-Slot, `data.exchange_inventory`, Migration aus `stake_inventory`) → Knopf „Einwechseln: +N [coin]“ → `data.coins`. Knopf statt Sofort-Umtausch, weil es kein Zurück gibt. Bruchteile bleiben auf dem Konto, gesetzt werden ganze Coins (`gamble.balance`)
+- Einsatz-Zeile: Coins pro Dreh (`data.stake_coins`, nil = höchstmöglich), höchstens Zielwert und Konto. Neues Ziel setzt nil, also wieder 50 %. Der eingestellte Wert wird nicht auf das Konto geklemmt gespeichert
+- Chance unverändert `max × faktor × einsatz / zielwert` (Standard höchstens 50 %), neue Einstellung `item-gamble-exchange-rate` 0,45. Gemessen (3 × 40.000 Drehs, gemischte Ziele, Freispins + Trostpreise): 24–25 %. Bei 0,5 waren es 26–29 %
+- Trostpreise sind Coins (1/10 oder 1/100 des Einsatzes, abgerundet, unter 1 Coin kein Preis, sonst brächten Ein-Coin-Einsätze zu viel zurück), gehen aufs Konto. Walze zeigt sie als Coin-Feld
+- Statistik in Coins, Gewinne zum Einwechselwert (so zeigt das Verhältnis den ganzen Hausvorteil, ~25 %). Alte Statistik und `data.last` werden bei der Migration verworfen, offene Freispins werden Coin-Wetten (`coins` = alter Einsatzwert)
+- Minimalchance-Standard 0,000005 (1 rot als Coins → 100 Promethium ≈ 1:150.000). **Factorio speichert alle Einstellungswerte in mod-settings.dat, auch Standardwerte** – geänderte Standards erreichen bestehende Installationen nicht, nur neue Einstellungen
+- **2.0 und 2.1 aus einem Code:** `values.lua` unterscheidet per `helpers.compare_versions(script.active_mods.base, "2.1.0")` (`category`/`categories`, `is_parameter`/`parameter`, Produkt-Wahrscheinlichkeiten). Unbekannte Felder an Prototypen abzufragen wirft Fehler. Repo-`info.json` ist 2.1 (x.y.0), `python tools/pack_mod.py --factorio 2.0 --version x.y.1` packt die 2.0-Zip (wie bei Uranium-Artillery-Shell). Headless getestet nur 2.0 (installiert ist 2.0.77)
 
 ### Arbeitsweise Cloud vs. lokal
 
