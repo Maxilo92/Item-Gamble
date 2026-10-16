@@ -3,7 +3,7 @@
 Exchange items for coins, bet them on a target item and let the wheel of fortune decide. Needs Space Age, available for Factorio 2.0 and 2.1.
 
 - **Item values:** every item gets a value computed from its recipes, raw materials and how much research it needs. Later items are worth more. Quality and freshness count. Works with items from other mods.
-- **Coins:** like chips in a casino. Put items into the exchange slot and exchange them at 45 % of their value. Coins sit on your own account (not as items) and stay there when you close the window. There is no way back: coins are only good for spinning.
+- **Coins:** like chips in a casino. Put items into the exchange slot and exchange them at 45 % of their value. Coins sit on your own account (not as items) and stay there when you close the window. Coins are only good for spinning. In case you misclicked, Undo takes back the last exchange (your account can go below zero if the coins are already spent).
 - **Chance:** you bet coins on a target item. Staking the full target value is a coin flip at 50 %, less stake means a lower chance. On average about a quarter of the exchanged value comes back as items.
 - **Wheel:** an animated reel with near misses, fast and slow spins. The stake is always gone, a win pays the target.
 - **Consolation prizes:** some of the losing fields hold a tenth or a hundredth of the stake in coins.

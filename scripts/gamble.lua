@@ -200,7 +200,8 @@ end
 -- ── Konto ───────────────────────────────────────────────────────────────────
 
 -- Ganze Coins auf dem Konto. Intern zählen auch Bruchteile (ein Holz bringt einen
--- Viertel-Coin), gesetzt werden nur ganze.
+-- Viertel-Coin), gesetzt werden nur ganze. Nach einem Rückgängig kann das Konto im
+-- Minus stehen, dann geht nichts, bis man wieder genug einwechselt.
 function gamble.balance(data)
   return math.floor((data.coins or 0) + 1e-9)
 end
@@ -223,17 +224,64 @@ function gamble.exchange_offer(data)
   return coins, nil
 end
 
+-- Das zuletzt Eingewechselte liegt unverändert in einem eigenen Inventar
+-- (data.undo_inventory), damit Rückgängig genau diese Items zurückgibt - mit ihrer
+-- Frische, die dort weiterläuft wie überall sonst. Das nächste Einwechseln ersetzt es.
+local function undo_slot(data)
+  local inventory = data.undo_inventory
+  if not (inventory and inventory.valid) then
+    inventory = game.create_inventory(1)
+    data.undo_inventory = inventory
+  end
+  return inventory[1]
+end
+
 -- Wechselt den ganzen Wechsel-Slot ein. Gibt die gutgeschriebenen Coins zurück.
 function gamble.exchange(data)
   local coins = gamble.exchange_offer(data)
   if not coins then
     return nil
   end
-  data.exchange_inventory[1].clear()
+  local undo = undo_slot(data)
+  undo.clear()
+  undo.swap_stack(data.exchange_inventory[1])
+  data.undo_coins = coins
   data.coins = (data.coins or 0) + coins
   local stats = gamble.stats(data)
   stats.exchanged = (stats.exchanged or 0) + coins
   return coins
+end
+
+-- Was Rückgängig zurückgäbe: stack, coins. nil, wenn es nichts rückgängig zu machen gibt.
+function gamble.undo_offer(data)
+  local inventory = data.undo_inventory
+  if not (inventory and inventory.valid and inventory[1].valid_for_read and data.undo_coins) then
+    return nil
+  end
+  return inventory[1], data.undo_coins
+end
+
+-- Letztes Einwechseln zurücknehmen: die Items zurück (in den Wechsel-Slot, ist der
+-- belegt ins Inventar, Rest auf den Boden), die Coins wieder ab - auch ins Minus,
+-- wenn sie inzwischen verspielt sind. Ein Kredit ohne Gewinn: Spielen geht erst
+-- wieder, wenn das Konto über null ist.
+function gamble.undo_exchange(player, data)
+  local stack, coins = gamble.undo_offer(data)
+  if not stack then
+    return false
+  end
+  local slot = data.exchange_inventory[1]
+  if not slot.valid_for_read then
+    slot.swap_stack(stack)
+  else
+    give(player, stack)
+    stack.clear()
+  end
+  data.undo_coins = nil
+  data.coins = (data.coins or 0) - coins
+  local stats = gamble.stats(data)
+  stats.exchanged = (stats.exchanged or 0) - coins
+  return true
 end
 
 -- Gewinn-Bereich ins Inventar räumen: alles, oder mit like nur die Sorte (Item und
@@ -683,7 +731,7 @@ end
 function gamble.remove_player(player_index)
   local data = storage.players[player_index]
   if data then
-    for _, key in pairs({ "exchange_inventory", "stake_inventory", "output_inventory" }) do
+    for _, key in pairs({ "exchange_inventory", "stake_inventory", "output_inventory", "undo_inventory" }) do
       if data[key] and data[key].valid then
         data[key].destroy()
       end

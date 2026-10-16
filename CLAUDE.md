@@ -304,6 +304,14 @@ User: „füge dann ein autospin hinzu“ (nach dem Push von 0.26).
 - Stoppt selbst, wenn `gamble.evaluate(data).ok` nicht mehr gilt (Konto leer, Gewinn-Bereich voll, unter Minimum), und beim Schließen. Stoppen lässt den laufenden Dreh zu Ende laufen. Bei einem Gewinn läuft er bewusst weiter (sonst stoppt er bei 50 %-Wetten ständig)
 - `start_spin` in gui.lua bündelt Drehen-Knopf und Autospin-Start (inkl. angehaltener Zeit)
 
+### 0.28.0 / 0.28.1: Rückgängig
+
+User: Rückgängig-Knopf neben Einwechseln „für alle Fälle“: letzte Items zurück, Coins wieder ab, Konto darf ins Minus.
+
+- `gamble.exchange` legt den eingewechselten Stack unverändert in `data.undo_inventory` (1 Slot, `swap_stack`), merkt `data.undo_coins`. Nächstes Einwechseln ersetzt ihn, nur das letzte ist rückgängig. Frische läuft dort weiter, zurück kommt genau dieser Stack
+- `gamble.undo_exchange`: Stack in den Wechsel-Slot (belegt → Inventar → Boden), Coins abziehen, `stats.exchanged` mindern. Konto rot im Minus, Hinweis `hint-debt`, Drehen gesperrt (`no-coins`). Kein Gewinn möglich: Rückgängig nach dem Verspielen ist ein Kredit, den man durch Einwechseln zurückzahlt
+- Ausnutzbar? Rückgängig gibt nur zurück, was man eingewechselt hat, und nimmt die vollen Coins; Gewinne aus verspielten Coins stehen einer gleich großen Schuld gegenüber
+
 ### Arbeitsweise Cloud vs. lokal
 
 - In der Cloud gibt es kein Factorio. Der Push erreicht den lokalen Mod-Ordner (Junction) nur nach `git pull`, danach Factorio komplett neu starten (neue Einstellungen!) und `/gamble-recalc`

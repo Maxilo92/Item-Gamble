@@ -37,6 +37,7 @@ local NAMES = {
   close = "item_gamble_close",
   exchange_slot = "item_gamble_exchange_slot",
   exchange = "item_gamble_exchange",
+  undo = "item_gamble_undo",
   stake_slider = "item_gamble_stake_slider",
   stake_amount = "item_gamble_stake_amount",
   target = "item_gamble_target",
@@ -264,6 +265,8 @@ local function build_window(player, data)
   local exchange = exchange_cell.add({ type = "button", name = NAMES.exchange })
   exchange.style.minimal_width = 120
   local exchange_problem = exchange_cell.add({ type = "label", style = "bold_red_label" })
+  -- Für alle Fälle: das letzte Einwechseln zurücknehmen
+  local undo = exchange_cell.add({ type = "button", name = NAMES.undo, caption = { "item-gamble.undo" } })
   slots.add({ type = "empty-widget" })
 
   slots.add({ type = "label", style = "caption_label", caption = { "item-gamble.stake" } })
@@ -389,6 +392,7 @@ local function build_window(player, data)
     exchange_slot = exchange_slot,
     exchange = exchange,
     exchange_problem = exchange_problem,
+    undo = undo,
     stake_slider = stake_slider,
     stake_amount = stake_amount,
     stake_total = stake_total,
@@ -636,8 +640,9 @@ function gui.refresh(player, typing)
   end
   -- data.multi bleibt die gewählte Stufe; reicht das Konto nicht, zeigt der Knopf weniger
 
-  -- Konto und Wechsel-Slot
+  -- Konto (rot im Minus) und Wechsel-Slot
   elems.balance.caption = format_coins(state.balance)
+  elems.balance.style = state.balance < 0 and "bold_red_label" or "heading_2_label"
   show_stack(elems.exchange_slot, data.exchange_inventory[1])
   local offer, offer_problem = gamble.exchange_offer(data)
   local exchange = elems.exchange
@@ -662,6 +667,15 @@ function gui.refresh(player, typing)
     exchange_problem.caption = { "item-gamble.problem-exchange-no-value", rich_item(slot.name, slot.quality.name) }
   elseif offer_problem == "equipment" then
     exchange_problem.caption = { "item-gamble.problem-exchange-equipment" }
+  end
+  local undo_stack, undo_coins = gamble.undo_offer(data)
+  local undo = elems.undo
+  undo.enabled = undo_stack ~= nil
+  if undo_stack then
+    undo.tooltip = { "item-gamble.undo-tooltip", undo_stack.count, rich_item(undo_stack.name, undo_stack.quality.name),
+      format_coins(undo_coins), COIN }
+  else
+    undo.tooltip = { "item-gamble.undo-none" }
   end
 
   local stake = state.stake
@@ -708,7 +722,9 @@ function gui.refresh(player, typing)
   elseif PROBLEM_KEYS[state.problem] then
     set_label(chance, problem_caption(state, data), "bold_red_label")
   elseif HINT_KEYS[state.problem] then
-    set_label(chance, { HINT_KEYS[state.problem] }, "label")
+    -- Im Minus nach einem Rückgängig: sagen, warum es nicht geht
+    local key = state.problem == "no-coins" and state.balance < 0 and "item-gamble.hint-debt" or HINT_KEYS[state.problem]
+    set_label(chance, { key }, "label")
   elseif state.chance then
     set_label(chance, chance_caption(state.chance), "heading_2_label")
   else
@@ -1122,6 +1138,11 @@ local function on_click(event)
   elseif name == NAMES.exchange then
     if gamble.exchange(data) then
       player.play_sound({ path = "item-move/coin" })
+    end
+    gui.refresh(player)
+  elseif name == NAMES.undo then
+    if gamble.undo_exchange(player, data) then
+      player.play_sound({ path = "item-pick/coin" })
     end
     gui.refresh(player)
   elseif tags[TAGS.output] then

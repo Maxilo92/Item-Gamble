@@ -1,4 +1,17 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.28.1
+Date: 2026-10-16
+  Info:
+    - Same as 0.28.0, packed for Factorio 2.0.
+---------------------------------------------------------------------------------------------------
+Version: 0.28.0
+Date: 2026-10-16
+  Features:
+    - Undo button next to Exchange: takes back the last exchange. You get exactly those items back
+      (freshness kept), into the exchange slot or your inventory, and the coins are deducted again.
+      If they are already spent, your account goes below zero and shows red; spinning is blocked
+      until you exchange enough to get back above zero. Only the last exchange can be undone.
+---------------------------------------------------------------------------------------------------
 Version: 0.27.1
 Date: 2026-10-16
   Info:
