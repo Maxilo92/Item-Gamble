@@ -45,6 +45,7 @@ local NAMES = {
   target_amount = "item_gamble_target_amount",
   multi = "item_gamble_multi",
   autospin = "item_gamble_autospin",
+  stop_on_win = "item_gamble_stop_on_win",
   take_all = "item_gamble_take_all",
   reset_stats = "item_gamble_reset_stats",
   spin = "item_gamble_spin",
@@ -58,6 +59,7 @@ local TAGS = {
   item = "item_gamble_item",
   quality = "item_gamble_quality",
   output = "item_gamble_output_slot",
+  recent = "item_gamble_recent",
 }
 
 -- Was noch fehlt: normale Schrift statt rot
@@ -279,6 +281,17 @@ local function build_window(player, data)
   local target_slider, target_amount = amount(NAMES.target_slider, NAMES.target_amount, { "item-gamble.count-tooltip" })
   local target_total = total()
 
+  -- Zuletzt gespielte Wetten, ein Klick stellt sie wieder ein
+  local recent_label = slots.add({ type = "label", style = "caption_label", caption = { "item-gamble.recent" } })
+  local recent_gap = slots.add({ type = "empty-widget" })
+  local recent_row = slots.add({ type = "flow", direction = "horizontal" })
+  recent_row.style.horizontal_spacing = 0
+  local recent_buttons = {}
+  for i = 1, gamble.MAX_RECENT do
+    recent_buttons[i] = recent_row.add({ type = "sprite-button", style = "slot_button", tags = { [TAGS.recent] = i } })
+  end
+  local recent_end = slots.add({ type = "empty-widget" })
+
   content.add({ type = "line" })
 
   -- Chance (oder was den Dreh verhindert), Walze, Ergebnis, Gewinn - mittig untereinander
@@ -359,6 +372,14 @@ local function build_window(player, data)
   filler.drag_target = window
   -- Autospin: dreht mit der eingestellten Wette weiter, bis man stoppt. Stil und
   -- Beschriftung setzt gui.refresh (Auto bzw. rot Stopp).
+  local stop_on_win = buttons.add({
+    type = "checkbox",
+    name = NAMES.stop_on_win,
+    caption = { "item-gamble.stop-on-win" },
+    tooltip = { "item-gamble.stop-on-win-tooltip" },
+    state = data.autospin_stop_on_win == true,
+  })
+  stop_on_win.style.right_margin = 8
   local autospin = buttons.add({ type = "button", name = NAMES.autospin })
   -- Multiplikator: Klick schaltet weiter, Rechtsklick zurück. So hoch und fett wie Drehen.
   local multi = buttons.add({
@@ -400,6 +421,8 @@ local function build_window(player, data)
     target_slider = target_slider,
     target_amount = target_amount,
     target_total = target_total,
+    recent_cells = { recent_label, recent_gap, recent_row, recent_end },
+    recent_buttons = recent_buttons,
     output_table = output_table,
     output_buttons = {},
     chance = chance,
@@ -407,6 +430,7 @@ local function build_window(player, data)
     result = result,
     multi = multi,
     autospin = autospin,
+    stop_on_win = stop_on_win,
     take_all = take_all,
     spin = spin,
     stats = stats,
@@ -625,9 +649,9 @@ function gui.refresh(player, typing)
     return
   end
   refresh_inventory(player, elems)
-  local state = gamble.evaluate(data)
+  local state = gamble.evaluate(data, player.force)
   if gamble.fit_output(data) then
-    state = gamble.evaluate(data)
+    state = gamble.evaluate(data, player.force)
   end
   refresh_output(data, elems)
   elems.take_all.enabled = not data.output_inventory.is_empty()
@@ -698,6 +722,24 @@ function gui.refresh(player, typing)
   show_amount(elems.target_slider, elems.target_amount, state.count, state.max_count,
     not spinning, typing == NAMES.target_amount)
 
+  -- Zuletzt gespielt: nur sichtbar, wenn es etwas gibt
+  local recent = gamble.recent(data)
+  for _, cell in ipairs(elems.recent_cells) do
+    cell.visible = #recent > 0
+  end
+  for i, button in ipairs(elems.recent_buttons) do
+    local bet = recent[i]
+    button.visible = bet ~= nil
+    if bet then
+      button.sprite = "item/" .. bet.name
+      button.quality = bet.quality
+      button.number = bet.count
+      button.enabled = not spinning
+      local stake = bet.stake and { "item-gamble.recent-stake", format_coins(bet.stake), COIN } or { "item-gamble.recent-stake-max" }
+      button.tooltip = { "item-gamble.recent-tooltip", bet.count, rich_item(bet.name, bet.quality), stake }
+    end
+  end
+
   -- Anstehende Freispins werden zuerst gespielt, mit ihrer eigenen festen Wette
   local free = not spinning and gamble.next_freespin(data)
 
@@ -732,7 +774,12 @@ function gui.refresh(player, typing)
   end
   chance.style.bottom_margin = 4
   if stake and state.target_value and not spinning and not free then
-    chance.tooltip = { "item-gamble.chance-tooltip", format_coins(stake * multi), format_number(state.target_value * multi) }
+    local tooltip = { "item-gamble.chance-tooltip", format_coins(stake * multi), format_number(state.target_value * multi) }
+    local levels = gamble.luck_levels(player.force)
+    if levels > 0 then
+      tooltip = { "", tooltip, "\n", { "item-gamble.luck-line", string.format("%g", levels * gamble.LUCK_PER_LEVEL * 100) } }
+    end
+    chance.tooltip = tooltip
   else
     chance.tooltip = ""
   end
@@ -766,6 +813,7 @@ function gui.refresh(player, typing)
   autospin.caption = data.autospin and { "item-gamble.autospin-stop" } or { "item-gamble.autospin" }
   autospin.tooltip = data.autospin and { "item-gamble.autospin-stop-tooltip" } or { "item-gamble.autospin-tooltip" }
   autospin.enabled = data.autospin or ((free or state.ok) and true or false)
+  elems.stop_on_win.state = data.autospin_stop_on_win == true
 
   elems.spin.enabled = (free or state.ok) and not spinning
   if spinning then
@@ -1053,6 +1101,12 @@ local function announce(player, result)
 end
 
 function gui.open(player)
+  -- Erst nach der Forschung; der Shortcut ist bis dahin ausgegraut, ALT+G sagt warum
+  if not gamble.unlocked(player.force) then
+    player.create_local_flying_text({ text = { "item-gamble.locked" }, create_at_cursor = true })
+    player.play_sound({ path = "utility/cannot_build" })
+    return
+  end
   local data = gamble.get(player.index)
   local old = player.gui.screen[WINDOW]
   if old then
@@ -1168,7 +1222,7 @@ local function on_click(event)
     if data.spin then
       return
     end
-    local state = gamble.evaluate(data)
+    local state = gamble.evaluate(data, player.force)
     local current = state.multi or math.max(1, math.min(math.floor(data.multi or 1), gamble.MAX_MULTI))
     data.multi = step_multiplier(current, state.max_multi, event.button == defines.mouse_button_type.right)
     gui.refresh(player)
@@ -1191,6 +1245,17 @@ local function on_click(event)
         end
         start_spin(player, data)
       end
+    end
+    gui.refresh(player)
+  elseif tags[TAGS.recent] then
+    if data.spin then
+      return
+    end
+    -- Wie ein Slot: links einstellen, rechts aus der Liste nehmen
+    if event.button == defines.mouse_button_type.right then
+      gamble.forget_recent(data, tags[TAGS.recent])
+    elseif gamble.apply_recent(data, tags[TAGS.recent]) then
+      close_picker(player, data)
     end
     gui.refresh(player)
   elseif name == NAMES.target then
@@ -1301,6 +1366,15 @@ local function on_closed(event)
   end
 end
 
+local function on_checked(event)
+  local element = event.element
+  if element and element.valid and element.name == NAMES.stop_on_win then
+    local data = gamble.get(event.player_index)
+    data.autospin_stop_on_win = element.state
+    gui.refresh(game.get_player(event.player_index))
+  end
+end
+
 local function on_location_changed(event)
   local element = event.element
   if element and element.valid and element.name == WINDOW then
@@ -1329,7 +1403,7 @@ function gui.tick()
           if gamble.next_freespin(data) then
             gamble.spin(player, data)
           elseif data.autospin then
-            if gamble.evaluate(data).ok then
+            if gamble.evaluate(data, player.force).ok then
               gamble.spin(player, data)
             else
               data.autospin = false
@@ -1359,6 +1433,9 @@ function gui.tick()
         local result = gamble.finish(player, data)
         if result.won or (result.freespins or 0) > 0 then
           player.play_sound({ path = "utility/achievement_unlocked" })
+        end
+        if data.autospin and data.autospin_stop_on_win and (result.wins or 0) > 0 then
+          data.autospin = false
         end
         if panel_open then
           gui.refresh(player)
@@ -1421,6 +1498,7 @@ function gui.register_events()
   script.on_event(defines.events.on_gui_click, on_click)
   script.on_event(defines.events.on_gui_closed, on_closed)
   script.on_event(defines.events.on_gui_location_changed, on_location_changed)
+  script.on_event(defines.events.on_gui_checked_state_changed, on_checked)
   script.on_event(defines.events.on_gui_text_changed, on_text_changed)
   script.on_event(defines.events.on_gui_value_changed, on_value_changed)
   script.on_event(defines.events.on_gui_confirmed, on_confirmed)

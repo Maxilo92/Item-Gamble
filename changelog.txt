@@ -1,4 +1,24 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.29.1
+Date: 2026-10-16
+  Info:
+    - Same as 0.29.0, packed for Factorio 2.0.
+---------------------------------------------------------------------------------------------------
+Version: 0.29.0
+Date: 2026-10-16
+  Features:
+    - Research "Gambling" (red and green science, after logistic science): the window, the
+      shortcut and ALT + G only work once it is researched. In saves where you already gambled,
+      your force gets it for free.
+    - Infinite research "Luck" (red to yellow plus space science, cost doubles each level): every
+      level raises win chances by 1 % of the chance. No bet ever gets better than 50 %, so luck
+      helps long shots, not coin flips. The chance tooltip shows your luck bonus.
+    - Recent bets: up to five slots below the target. Left click sets target, amount and stake
+      again, right click removes one.
+    - "Stop on win" checkbox next to Auto: autospin stops as soon as a spin wins the target.
+  Graphics:
+    - Technology icons for Gambling and Luck.
+---------------------------------------------------------------------------------------------------
 Version: 0.28.1
 Date: 2026-10-16
   Info:

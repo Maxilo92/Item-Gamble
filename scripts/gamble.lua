@@ -197,6 +197,44 @@ local function same_item(a, b)
   return a.name == b.name and a.quality.name == b.quality.name
 end
 
+-- ── Forschung ───────────────────────────────────────────────────────────────
+
+gamble.TECHNOLOGY = "item-gamble"
+gamble.LUCK_TECHNOLOGY = "item-gamble-luck"
+gamble.LUCK_PER_LEVEL = 0.01   -- je erforschter Stufe +1 % der Chance
+
+function gamble.unlocked(force)
+  local tech = force and force.technologies[gamble.TECHNOLOGY]
+  return tech == nil or tech.researched
+end
+
+-- Erforschte Stufen der unendlichen Glücks-Forschung. level ist die Stufe, die als
+-- nächste erforscht wird; erst wenn alle Stufen durch sind, ist researched gesetzt.
+function gamble.luck_levels(force)
+  local tech = force and force.technologies[gamble.LUCK_TECHNOLOGY]
+  if not tech then
+    return 0
+  end
+  return math.max(0, tech.researched and tech.level or tech.level - 1)
+end
+
+function gamble.luck(force)
+  return 1 + gamble.LUCK_PER_LEVEL * gamble.luck_levels(force)
+end
+
+-- Seit 0.29.0 braucht das Glücksspiel eine Forschung. Wer in einem Spielstand schon
+-- gespielt hat, soll den Zugang nicht verlieren: dessen Force bekommt sie geschenkt.
+function gamble.grant_existing()
+  for player_index, data in pairs(storage.players or {}) do
+    local player = game.get_player(player_index)
+    local played = (data.coins or 0) ~= 0 or data.stats ~= nil or data.open or data.target ~= nil
+    local tech = player and player.force.technologies[gamble.TECHNOLOGY]
+    if played and tech and not tech.researched then
+      tech.researched = true
+    end
+  end
+end
+
 -- ── Konto ───────────────────────────────────────────────────────────────────
 
 -- Ganze Coins auf dem Konto. Intern zählen auch Bruchteile (ein Holz bringt einen
@@ -434,8 +472,8 @@ end
 -- Einsatz in Coins pro Dreh: die eingestellte Zahl (data.stake_coins), ohne
 -- Einstellung das Höchstmögliche. Höchstens so viel, wie das Ziel wert ist - mehr
 -- brächte keine bessere Chance als das Maximum - und höchstens das Konto.
-function gamble.evaluate(data)
-  local state = { balance = gamble.balance(data) }
+function gamble.evaluate(data, force)
+  local state = { balance = gamble.balance(data), luck = gamble.luck(force) }
 
   local target = data.target
   if target then
@@ -473,7 +511,7 @@ function gamble.evaluate(data)
   elseif not state.stake then
     state.problem = "lower"
   else
-    local chance, ratio, reason = values.chance(state.stake, state.target_value)
+    local chance, ratio, reason = values.chance(state.stake, state.target_value, state.luck)
     state.chance, state.ratio, state.problem = chance, ratio, reason
   end
   state.ok = state.problem == nil
@@ -547,6 +585,61 @@ function gamble.next_freespin(data)
   return nil
 end
 
+-- ── Zuletzt gespielt ────────────────────────────────────────────────────────
+--
+-- Die letzten Wetten (Ziel, Menge, eingestellter Einsatz), neueste vorne. Ein Klick
+-- stellt eine davon wieder ein. Gleiche Ziele mit gleicher Menge stehen nur einmal da.
+
+gamble.MAX_RECENT = 5
+
+local function remember_bet(data, state)
+  local bet = {
+    name = data.target.name,
+    quality = data.target.quality,
+    count = state.count,
+    stake = data.stake_coins,
+  }
+  local list = { bet }
+  for _, old in ipairs(data.recent or {}) do
+    if #list >= gamble.MAX_RECENT then
+      break
+    end
+    if not (old.name == bet.name and old.quality == bet.quality and old.count == bet.count) then
+      list[#list + 1] = old
+    end
+  end
+  data.recent = list
+end
+
+-- Wetten mit Items, die es nicht mehr gibt (Mod entfernt), fallen weg
+function gamble.recent(data)
+  local list = {}
+  for _, bet in ipairs(data.recent or {}) do
+    if prototypes.item[bet.name] and prototypes.quality[bet.quality or "normal"] then
+      list[#list + 1] = bet
+    end
+  end
+  data.recent = list
+  return list
+end
+
+function gamble.apply_recent(data, index)
+  local bet = gamble.recent(data)[index]
+  if not bet then
+    return false
+  end
+  data.target = { name = bet.name, quality = bet.quality }
+  data.count = bet.count
+  data.stake_coins = bet.stake
+  data.last = nil
+  return true
+end
+
+function gamble.forget_recent(data, index)
+  local list = gamble.recent(data)
+  table.remove(list, index)
+end
+
 -- Startet einen Dreh. Liegen Freispins an, wird zuerst einer davon gespielt, sonst
 -- gehen die Coins sofort vom Konto. Das Ergebnis steht sofort fest und liegt in
 -- data.spin. Ausgezahlt wird erst in gamble.finish, wenn die Walze steht - sonst
@@ -575,11 +668,12 @@ function gamble.spin(player, data)
       free = true,
     }
   else
-    local state = gamble.evaluate(data)
+    local state = gamble.evaluate(data, player.force)
     if not state.ok then
       return
     end
     data.coins = data.coins - state.stake * state.multi
+    remember_bet(data, state)
     bet = {
       coins = state.stake,
       name = data.target.name,

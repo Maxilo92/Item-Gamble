@@ -18,6 +18,7 @@ end)
 -- Neue oder geänderte Mods können neue Items und Rezepte bringen
 script.on_configuration_changed(function()
   gamble.init()
+  gamble.grant_existing()
   translate.init()
   values.rebuild()
   translate.request_all()
@@ -30,4 +31,12 @@ script.on_event(defines.events.on_runtime_mod_setting_changed, function(event)
     values.rebuild()
   end
   gui.refresh_all()
+end)
+
+-- Glücks-Forschung ändert die Chancen, offene Fenster zeigen sie gleich neu
+script.on_event(defines.events.on_research_finished, function(event)
+  local name = event.research.name
+  if name == gamble.TECHNOLOGY or name == gamble.LUCK_TECHNOLOGY then
+    gui.refresh_all()
+  end
 end)

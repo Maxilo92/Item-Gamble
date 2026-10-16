@@ -550,7 +550,9 @@ end
 -- Das Ziel muss mindestens so viel wert sein wie der Einsatz, für die Chance zählt
 -- der Einsatz aber nur mit dem Einsatz-Wertfaktor: Den Einsatz zum vollen Zielwert
 -- gibt es höchstens mit Maximum × Faktor (Standard 50 %).
-function values.chance(stake_value, target_value)
+-- luck (ab 1) kommt aus der unendlichen Forschung und hebt die Chance an, aber nie
+-- über diese Höchstchance - besser als 50 % wird keine Wette.
+function values.chance(stake_value, target_value, luck)
   if not stake_value or not target_value or stake_value <= 0 then
     return nil, nil, "no-value"
   end
@@ -561,7 +563,8 @@ function values.chance(stake_value, target_value)
   local max = settings.global["item-gamble-max-chance"].value
   local min = math.min(settings.global["item-gamble-min-chance"].value, max)
   local factor = settings.global["item-gamble-stake-value-factor"].value
-  local chance = max * factor / r
+  local best = max * factor
+  local chance = math.min(best, best / r * (luck or 1))
   if chance < min then
     return chance, r, "below-min"
   end

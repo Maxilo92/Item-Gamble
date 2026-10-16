@@ -312,6 +312,16 @@ User: Rückgängig-Knopf neben Einwechseln „für alle Fälle“: letzte Items 
 - `gamble.undo_exchange`: Stack in den Wechsel-Slot (belegt → Inventar → Boden), Coins abziehen, `stats.exchanged` mindern. Konto rot im Minus, Hinweis `hint-debt`, Drehen gesperrt (`no-coins`). Kein Gewinn möglich: Rückgängig nach dem Verspielen ist ein Kredit, den man durch Einwechseln zurückzahlt
 - Ausnutzbar? Rückgängig gibt nur zurück, was man eingewechselt hat, und nimmt die vollen Coins; Gewinne aus verspielten Coins stehen einer gleich großen Schuld gegenüber
 
+### 0.29.0 / 0.29.1: Forschung, Glück, Zuletzt, Stopp bei Gewinn
+
+User wählte aus dem Brainstorming 1 (Forschung), 6 (zuletzt gespielte Ziele), 7 (Stopp bei Gewinn), danach Jackpot. Forschung „nur das Feature mit grüner Wissenschaft“ plus unendliche Forschung, die die Chancen „miniminimal“ verbessert. Nachgeschoben: „mach die max chance für etwas 50%“ → keine Wette wird besser als 50 %.
+
+- Technologie `item-gamble` (rot+grün, 100 × 15 s, nach logistic-science-pack), Shortcut mit `technology_to_unlock` + `unavailable_until_unlocked`, `gui.open` prüft `gamble.unlocked(force)` (Flying Text + cannot_build). `gamble.grant_existing()` in on_configuration_changed schenkt die Forschung Forces, deren Spieler schon gespielt haben
+- `item-gamble-luck`: max_level infinite, `500*2^(L-1)` × rot bis gelb + Weltraum, 60 s. Erforschte Stufen = `tech.level - 1`. `values.chance(..., luck)`: `min(max × faktor, max × faktor / r × luck)`, Glück +1 % der Chance je Stufe. Erwartungswert pro Coin steigt höchstens um den Faktor luck (10 Stufen ≈ 27,5 % statt 25 %)
+- `data.recent` (max 5, neueste vorne, gleiches Ziel+Menge nur einmal), gespeichert bei bezahlten Drehs mit `data.stake_coins` (nil = beste Chance). Zeile „Zuletzt“ im Slot-Raster, Spalte 3, nur sichtbar wenn belegt
+- Checkbox „Stopp bei Gewinn“ (`data.autospin_stop_on_win`) links neben Auto; gilt bei `result.wins > 0`
+- Technologie-Icons per `tools/make_tech_icons.py` (PIL, Coin + Würfel, Luck mit gelbem Plus)
+
 ### Arbeitsweise Cloud vs. lokal
 
 - In der Cloud gibt es kein Factorio. Der Push erreicht den lokalen Mod-Ordner (Junction) nur nach `git pull`, danach Factorio komplett neu starten (neue Einstellungen!) und `/gamble-recalc`
