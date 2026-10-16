@@ -59,7 +59,6 @@ local TAGS = {
   item = "item_gamble_item",
   quality = "item_gamble_quality",
   output = "item_gamble_output_slot",
-  recent = "item_gamble_recent",
 }
 
 -- Was noch fehlt: normale Schrift statt rot
@@ -131,6 +130,7 @@ local function format_coins(v)
 end
 
 local COIN = "[img=item/coin]"
+local JACKPOT_COLOR = { 1, 0.8, 0.2 }
 
 local function chance_caption(chance)
   if chance >= 0.01 then
@@ -246,6 +246,7 @@ local function build_window(player, data)
     local icon = cell.add({ type = "sprite", sprite = "item/coin" })
     icon.style.size = 32
     icon.style.stretch_image_to_widget_size = true
+    return cell
   end
 
   slots.add({ type = "label", style = "caption_label", caption = { "item-gamble.balance" } })
@@ -281,16 +282,12 @@ local function build_window(player, data)
   local target_slider, target_amount = amount(NAMES.target_slider, NAMES.target_amount, { "item-gamble.count-tooltip" })
   local target_total = total()
 
-  -- Zuletzt gespielte Wetten, ein Klick stellt sie wieder ein
-  local recent_label = slots.add({ type = "label", style = "caption_label", caption = { "item-gamble.recent" } })
-  local recent_gap = slots.add({ type = "empty-widget" })
-  local recent_row = slots.add({ type = "flow", direction = "horizontal" })
-  recent_row.style.horizontal_spacing = 0
-  local recent_buttons = {}
-  for i = 1, gamble.MAX_RECENT do
-    recent_buttons[i] = recent_row.add({ type = "sprite-button", style = "slot_button", tags = { [TAGS.recent] = i } })
-  end
-  local recent_end = slots.add({ type = "empty-widget" })
+  -- Jackpot: ein Topf für alle, golden, aus wenn die Einstellung 0 ist
+  local jackpot_label = slots.add({ type = "label", style = "caption_label", caption = { "item-gamble.jackpot" } })
+  local jackpot_icon = coin_icon()
+  local jackpot = slots.add({ type = "label", style = "heading_2_label" })
+  jackpot.style.font_color = JACKPOT_COLOR
+  local jackpot_end = slots.add({ type = "empty-widget" })
 
   content.add({ type = "line" })
 
@@ -421,8 +418,8 @@ local function build_window(player, data)
     target_slider = target_slider,
     target_amount = target_amount,
     target_total = target_total,
-    recent_cells = { recent_label, recent_gap, recent_row, recent_end },
-    recent_buttons = recent_buttons,
+    jackpot = jackpot,
+    jackpot_cells = { jackpot_label, jackpot_icon, jackpot, jackpot_end },
     output_table = output_table,
     output_buttons = {},
     chance = chance,
@@ -559,7 +556,7 @@ end
 
 -- Ein Dreh: Gewinn (Menge schon mal Multiplikator), Trostpreis oder Niete.
 -- Ergebnisse aus 0.13/0.14 mit mehreren Drehs zeigen die Summe ihrer Gewinne.
-local function result_caption(last)
+local function base_result_caption(last)
   local wins = last.wins or (last.won and 1 or 0)
   local prizes = last.prizes or (last.prize and { last.prize }) or {}
   local spilled = (last.spilled or 0) + (last.prize_spilled or 0)
@@ -585,6 +582,40 @@ local function result_caption(last)
     text = { "", text, " ", { "item-gamble.result-spilled", spilled } }
   end
   return text, style
+end
+
+local function result_caption(last)
+  local text, style = base_result_caption(last)
+  if last.jackpot then
+    local jackpot = { "item-gamble.result-jackpot", format_coins(last.jackpot), COIN }
+    -- Neben einer Niete reicht der Jackpot allein
+    text = style == "bold_red_label" and jackpot or { "", jackpot, "  ", text }
+    style = "bold_green_label"
+  end
+  return text, style
+end
+
+-- Jackpot-Zeile: Topf, im Tooltip Anteil, eigene Chance pro Dreh und letzter Treffer
+local function refresh_jackpot(elems, paid)
+  local share = gamble.jackpot_share()
+  for _, cell in ipairs(elems.jackpot_cells) do
+    cell.visible = share > 0
+  end
+  if share <= 0 then
+    return
+  end
+  local pot = gamble.jackpot()
+  elems.jackpot.caption = format_coins(pot.amount)
+  local tooltip = { "item-gamble.jackpot-tooltip", string.format("%g", share * 100) }
+  local chance = paid and gamble.jackpot_chance(paid) or 0
+  if chance > 0 then
+    tooltip = { "", tooltip, "\n", { "item-gamble.jackpot-chance", string.format("%d", math.floor(1 / chance + 0.5)) } }
+  end
+  local last = pot.last and game.get_player(pot.last.player)
+  if last then
+    tooltip = { "", tooltip, "\n", { "item-gamble.jackpot-last", last.name, format_coins(pot.last.amount), COIN } }
+  end
+  elems.jackpot.tooltip = tooltip
 end
 
 local function show_stack(button, stack)
@@ -722,24 +753,6 @@ function gui.refresh(player, typing)
   show_amount(elems.target_slider, elems.target_amount, state.count, state.max_count,
     not spinning, typing == NAMES.target_amount)
 
-  -- Zuletzt gespielt: nur sichtbar, wenn es etwas gibt
-  local recent = gamble.recent(data)
-  for _, cell in ipairs(elems.recent_cells) do
-    cell.visible = #recent > 0
-  end
-  for i, button in ipairs(elems.recent_buttons) do
-    local bet = recent[i]
-    button.visible = bet ~= nil
-    if bet then
-      button.sprite = "item/" .. bet.name
-      button.quality = bet.quality
-      button.number = bet.count
-      button.enabled = not spinning
-      local stake = bet.stake and { "item-gamble.recent-stake", format_coins(bet.stake), COIN } or { "item-gamble.recent-stake-max" }
-      button.tooltip = { "item-gamble.recent-tooltip", bet.count, rich_item(bet.name, bet.quality), stake }
-    end
-  end
-
   -- Anstehende Freispins werden zuerst gespielt, mit ihrer eigenen festen Wette
   local free = not spinning and gamble.next_freespin(data)
 
@@ -749,6 +762,7 @@ function gui.refresh(player, typing)
   elems.multi.caption = "×" .. multi
   elems.multi.enabled = not spinning and not free
   local show_totals = multi > 1 and not spinning and not free
+  refresh_jackpot(elems, not free and stake and stake * multi or nil)
   elems.stake_total.caption = show_totals and stake and { "item-gamble.total", multi, format_coins(stake * multi) } or ""
   elems.target_total.caption = show_totals and state.count and { "item-gamble.total", multi, state.count * multi } or ""
 
@@ -795,12 +809,12 @@ function gui.refresh(player, typing)
   elems.stats_line.visible = has_stats
   elems.stats_row.visible = has_stats
   if has_stats then
-    local best = stats.best and { "", stats.best.count, " × ", rich_item(stats.best.name, stats.best.quality) }
+    local best = stats.best and { "", rich_item(stats.best.name, stats.best.quality), "×", stats.best.count }
       or { "item-gamble.chance-none" }
     local ratio = stats.staked > 0 and string.format("%.0f", stats.returned / stats.staked * 100) or "–"
     elems.stats.caption = { "item-gamble.stats", format_coins(stats.staked), format_coins(stats.returned), ratio, best }
     elems.stats.tooltip = { "item-gamble.stats-tooltip", stats.spins, stats.wins, stats.freespins,
-      format_coins(stats.exchanged or 0), string.format("%.0f", values.exchange_rate() * 100) }
+      format_coins(stats.exchanged or 0), string.format("%.0f", values.exchange_rate() * 100), stats.jackpots or 0 }
   end
 
   -- Autospin: läuft er, ist der Knopf rot und stoppt ihn; sonst startet er, sobald
@@ -1100,6 +1114,19 @@ local function announce(player, result)
   player.print((result_caption(result)))
 end
 
+-- Nach dem Auszahlen: Ton bei Gewinn oder Freispin, ein Jackpot wird allen gemeldet
+local function celebrate(player, result)
+  if result.jackpot then
+    game.print({ "item-gamble.jackpot-announce", player.name, format_coins(result.jackpot), COIN },
+      { color = JACKPOT_COLOR })
+    for _, other in pairs(game.connected_players) do
+      other.play_sound({ path = "utility/achievement_unlocked" })
+    end
+  elseif result.won or (result.freespins or 0) > 0 then
+    player.play_sound({ path = "utility/achievement_unlocked" })
+  end
+end
+
 function gui.open(player)
   -- Erst nach der Forschung; der Shortcut ist bis dahin ausgegraut, ALT+G sagt warum
   if not gamble.unlocked(player.force) then
@@ -1125,6 +1152,7 @@ local function cleanup(player)
   if data then
     local result = gamble.finish(player, data)
     if result then
+      celebrate(player, result)
       announce(player, result)
     end
     gamble.return_items(player, data)
@@ -1162,10 +1190,7 @@ end
 local function start_spin(player, data)
   gamble.spin(player, data)
   if data.spin and game.tick_paused then
-    local result = gamble.finish(player, data)
-    if result.won or (result.freespins or 0) > 0 then
-      player.play_sound({ path = "utility/achievement_unlocked" })
-    end
+    celebrate(player, gamble.finish(player, data))
   end
 end
 
@@ -1245,17 +1270,6 @@ local function on_click(event)
         end
         start_spin(player, data)
       end
-    end
-    gui.refresh(player)
-  elseif tags[TAGS.recent] then
-    if data.spin then
-      return
-    end
-    -- Wie ein Slot: links einstellen, rechts aus der Liste nehmen
-    if event.button == defines.mouse_button_type.right then
-      gamble.forget_recent(data, tags[TAGS.recent])
-    elseif gamble.apply_recent(data, tags[TAGS.recent]) then
-      close_picker(player, data)
     end
     gui.refresh(player)
   elseif name == NAMES.target then
@@ -1384,7 +1398,15 @@ end
 
 -- Jeden Tick: laufende Walzen bewegen, fertige auszahlen. Gezählt werden eigene
 -- Frames statt Spielticks, damit ein geladener Spielstand dort weitermacht.
-function gui.tick()
+function gui.tick(event)
+  if event.tick % 30 == 0 then
+    for index, data in pairs(storage.players) do
+      local elems = data.open and data.elems
+      if elems and elems.window.valid and elems.jackpot and elems.jackpot.valid and gamble.jackpot_share() > 0 then
+        elems.jackpot.caption = format_coins(gamble.jackpot().amount)
+      end
+    end
+  end
   -- Anstehende Freispins und der Autospin laufen nach einer kurzen Pause von selbst
   -- an, solange das Fenster offen ist. Freispins zuerst (gamble.spin spielt sie
   -- immer vor der eigenen Wette). Geht die Wette nicht mehr (Konto leer, Gewinn-
@@ -1431,9 +1453,7 @@ function gui.tick()
       local panel_open = elems ~= nil and elems.window.valid
       if spin.frame >= spin.reel.duration then
         local result = gamble.finish(player, data)
-        if result.won or (result.freespins or 0) > 0 then
-          player.play_sound({ path = "utility/achievement_unlocked" })
-        end
+        celebrate(player, result)
         if data.autospin and data.autospin_stop_on_win and (result.wins or 0) > 0 then
           data.autospin = false
         end

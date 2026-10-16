@@ -93,10 +93,12 @@ function gamble.init()
   storage.players = storage.players or {}
   storage.rng = storage.rng or game.create_random_generator()
   storage.spins = storage.spins or {}
+  storage.jackpot = storage.jackpot or { amount = gamble.JACKPOT_SEED }
   for player_index, data in pairs(storage.players) do
     migrate(player_index, data)
     migrate_exchange_slot(data)
     migrate_to_coins(data)
+    data.recent = nil   -- „Zuletzt“ aus 0.29.0, wieder entfernt
     data.elems = nil
     data.picker = nil
     -- Walzenplan aus älterer Version ohne Dauer: im nächsten Tick auflösen
@@ -585,59 +587,55 @@ function gamble.next_freespin(data)
   return nil
 end
 
--- ── Zuletzt gespielt ────────────────────────────────────────────────────────
+-- ── Jackpot ─────────────────────────────────────────────────────────────────
 --
--- Die letzten Wetten (Ziel, Menge, eingestellter Einsatz), neueste vorne. Ein Klick
--- stellt eine davon wieder ein. Gleiche Ziele mit gleicher Menge stehen nur einmal da.
+-- Ein Topf für alle Spieler (storage.jackpot). Jeder bezahlte Dreh legt einen Anteil
+-- seines Einsatzes hinein (Einstellung, Standard 1 %) und hat eine kleine Chance, den
+-- ganzen Topf zu gewinnen - je mehr Coins, desto größer. Freispins kosten nichts und
+-- spielen nicht mit. Nach einem Treffer fängt der Topf beim Grundstock wieder an.
+--
+-- Balance: Im Schnitt zahlt der Topf aus, was hineinfließt, plus den Grundstock
+-- (Grundstock × Chance pro Coin = 0,2 % der Einsätze). Ein großer Topf hebt den
+-- Erwartungswert pro Coin auf Topf × Chance pro Coin: bei 500.000 Coins 10 % -
+-- auch dann bleibt das Spiel weit unter Pari.
 
-gamble.MAX_RECENT = 5
+gamble.JACKPOT_SEED = 10000
+gamble.JACKPOT_PER_COIN = 2e-7   -- Chance pro eingesetztem Coin, Ø-Topf ≈ Grundstock + Anteil / das
+gamble.JACKPOT_MAX_CHANCE = 0.01 -- mehr als 1 % pro Dreh gibt es nicht, egal wie hoch der Einsatz
 
-local function remember_bet(data, state)
-  local bet = {
-    name = data.target.name,
-    quality = data.target.quality,
-    count = state.count,
-    stake = data.stake_coins,
-  }
-  local list = { bet }
-  for _, old in ipairs(data.recent or {}) do
-    if #list >= gamble.MAX_RECENT then
-      break
-    end
-    if not (old.name == bet.name and old.quality == bet.quality and old.count == bet.count) then
-      list[#list + 1] = old
-    end
-  end
-  data.recent = list
+function gamble.jackpot_share()
+  return settings.global["item-gamble-jackpot-share"].value
 end
 
--- Wetten mit Items, die es nicht mehr gibt (Mod entfernt), fallen weg
-function gamble.recent(data)
-  local list = {}
-  for _, bet in ipairs(data.recent or {}) do
-    if prototypes.item[bet.name] and prototypes.quality[bet.quality or "normal"] then
-      list[#list + 1] = bet
-    end
-  end
-  data.recent = list
-  return list
+function gamble.jackpot()
+  storage.jackpot = storage.jackpot or { amount = gamble.JACKPOT_SEED }
+  return storage.jackpot
 end
 
-function gamble.apply_recent(data, index)
-  local bet = gamble.recent(data)[index]
-  if not bet then
-    return false
+-- Chance eines Drehs mit so vielen bezahlten Coins (Einsatz × Multiplikator)
+function gamble.jackpot_chance(paid)
+  if gamble.jackpot_share() <= 0 then
+    return 0
   end
-  data.target = { name = bet.name, quality = bet.quality }
-  data.count = bet.count
-  data.stake_coins = bet.stake
-  data.last = nil
-  return true
+  return math.min(gamble.JACKPOT_MAX_CHANCE, paid * gamble.JACKPOT_PER_COIN)
 end
 
-function gamble.forget_recent(data, index)
-  local list = gamble.recent(data)
-  table.remove(list, index)
+-- Einzahlen und würfeln. Gibt den Gewinn zurück oder nil. Der Topf wird sofort
+-- geleert, damit kein zweiter Spieler denselben Topf gewinnt, solange die Walze läuft.
+local function roll_jackpot(player, rng, paid)
+  local share = gamble.jackpot_share()
+  if share <= 0 or paid <= 0 then
+    return nil
+  end
+  local pot = gamble.jackpot()
+  pot.amount = pot.amount + paid * share
+  if rng() >= gamble.jackpot_chance(paid) then
+    return nil
+  end
+  local won = pot.amount
+  pot.amount = gamble.JACKPOT_SEED
+  pot.last = { player = player.index, amount = won, tick = game.tick }
+  return won
 end
 
 -- Startet einen Dreh. Liegen Freispins an, wird zuerst einer davon gespielt, sonst
@@ -673,7 +671,6 @@ function gamble.spin(player, data)
       return
     end
     data.coins = data.coins - state.stake * state.multi
-    remember_bet(data, state)
     bet = {
       coins = state.stake,
       name = data.target.name,
@@ -692,6 +689,7 @@ function gamble.spin(player, data)
   local freespin_chance = settings.global["item-gamble-freespin-chance"].value
   local pick = values.prize_picker(rng, bet.coins)
   local won = rng() < bet.chance
+  local jackpot = not bet.free and roll_jackpot(player, rng, bet.coins * multi) or nil
   local prize, freespins = nil, 0
   if not won then
     if rng() < freespin_chance then
@@ -730,6 +728,7 @@ function gamble.spin(player, data)
     frame = 0,
     reel = plan,
     prizes = prizes,
+    jackpot = jackpot,
   }
   storage.spins[player.index] = true
 end
@@ -742,7 +741,7 @@ end
 -- beim Einwechseln brächten - so zeigt das Verhältnis den ganzen Hausvorteil.
 
 function gamble.stats(data)
-  data.stats = data.stats or { staked = 0, returned = 0, spins = 0, wins = 0, freespins = 0 }
+  data.stats = data.stats or { staked = 0, returned = 0, spins = 0, wins = 0, freespins = 0, jackpots = 0 }
   return data.stats
 end
 
@@ -773,6 +772,10 @@ local function record_stats(data, result, wins, prizes)
   end
   for _, prize in ipairs(prizes) do
     stats.returned = stats.returned + (prize.coins or item_coins(prize))
+  end
+  if result.jackpot then
+    stats.returned = stats.returned + result.jackpot
+    stats.jackpots = (stats.jackpots or 0) + 1
   end
 end
 
@@ -816,6 +819,9 @@ function gamble.finish(player, data)
       -- Item-Trostpreis eines Drehs, der vor 0.26.0 begonnen hat
       result.prize_spilled = result.prize_spilled + pay(prize)
     end
+  end
+  if result.jackpot then
+    data.coins = (data.coins or 0) + result.jackpot
   end
   record_stats(data, result, wins, prizes)
   data.last = result

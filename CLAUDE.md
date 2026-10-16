@@ -322,6 +322,15 @@ User wählte aus dem Brainstorming 1 (Forschung), 6 (zuletzt gespielte Ziele), 7
 - Checkbox „Stopp bei Gewinn“ (`data.autospin_stop_on_win`) links neben Auto; gilt bei `result.wins > 0`
 - Technologie-Icons per `tools/make_tech_icons.py` (PIL, Coin + Würfel, Luck mit gelbem Plus)
 
+### 0.30.0 / 0.30.1: Jackpot, Zuletzt raus
+
+User (mit Screenshot von 0.29): „Zuletzt“ ist „nicht so toll“ → entfernt (`data.recent` wird bei der Migration gelöscht). Jackpot wie im Brainstorming.
+
+- `storage.jackpot = {amount, last}`, gemeinsam für alle Spieler. Bezahlte Drehs zahlen `Einsatz × Multi × Anteil` ein (Einstellung `item-gamble-jackpot-share`, 0,01, max 0,05) und würfeln mit `min(1 %, bezahlt × 2e-7)`. Treffer leert den Topf sofort (Grundstock 10.000), Auszahlung aufs Konto in `finish`. Freispins spielen nicht mit
+- Erwartungswert pro Coin = Topf × 2e-7; ein riesiger Topf (500k) bringt +10 %, bleibt weit unter Pari. Gemessen 3 × 60.000 Drehs: Rückfluss 24,8–25,2 %, ~104 Jackpots pro Runde (große Einsätze)
+- GUI: Zeile „Jackpot“ (gold, `font_color`) an der Stelle von „Zuletzt“, Tooltip mit Anteil, eigener Chance pro Dreh, letztem Gewinner; `gui.tick` frischt den Betrag alle 30 Ticks in offenen Fenstern auf. `celebrate()` bündelt Gewinn-Sounds und die Jackpot-Ansage an alle (`game.print` in Gold)
+- Screenshot zeigte: „Bester Treffer 34 × [icon]“ brach um → jetzt `[item]×34` ohne Leerzeichen
+
 ### Arbeitsweise Cloud vs. lokal
 
 - In der Cloud gibt es kein Factorio. Der Push erreicht den lokalen Mod-Ordner (Junction) nur nach `git pull`, danach Factorio komplett neu starten (neue Einstellungen!) und `/gamble-recalc`

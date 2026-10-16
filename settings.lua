@@ -74,4 +74,13 @@ data:extend({
     maximum_value = 0.25,
     order = "f",
   },
+  {
+    type = "double-setting",
+    name = "item-gamble-jackpot-share",
+    setting_type = "runtime-global",
+    default_value = 0.01,
+    minimum_value = 0,
+    maximum_value = 0.05,
+    order = "g",
+  },
 })
