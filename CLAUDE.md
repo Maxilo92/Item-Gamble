@@ -296,6 +296,14 @@ User: „noch ein wenig zu op“, will eine eigene Zwischenwährung wie Casino-C
 - Minimalchance-Standard 0,000005 (1 rot als Coins → 100 Promethium ≈ 1:150.000). **Factorio speichert alle Einstellungswerte in mod-settings.dat, auch Standardwerte** – geänderte Standards erreichen bestehende Installationen nicht, nur neue Einstellungen
 - **2.0 und 2.1 aus einem Code:** `values.lua` unterscheidet per `helpers.compare_versions(script.active_mods.base, "2.1.0")` (`category`/`categories`, `is_parameter`/`parameter`, Produkt-Wahrscheinlichkeiten). Unbekannte Felder an Prototypen abzufragen wirft Fehler. Repo-`info.json` ist 2.1 (x.y.0), `python tools/pack_mod.py --factorio 2.0 --version x.y.1` packt die 2.0-Zip (wie bei Uranium-Artillery-Shell). Headless getestet nur 2.0 (installiert ist 2.0.77)
 
+### 0.27.0 / 0.27.1: Autospin
+
+User: „füge dann ein autospin hinzu“ (nach dem Push von 0.26).
+
+- Knopf „Auto“ links neben dem Multiplikator (`data.autospin`), läuft er: `red_button` „Stopp“. Nutzt die Freispin-Automatik (`storage.autospins`, 60 Frames Pause), Freispins gehen weiterhin vor
+- Stoppt selbst, wenn `gamble.evaluate(data).ok` nicht mehr gilt (Konto leer, Gewinn-Bereich voll, unter Minimum), und beim Schließen. Stoppen lässt den laufenden Dreh zu Ende laufen. Bei einem Gewinn läuft er bewusst weiter (sonst stoppt er bei 50 %-Wetten ständig)
+- `start_spin` in gui.lua bündelt Drehen-Knopf und Autospin-Start (inkl. angehaltener Zeit)
+
 ### Arbeitsweise Cloud vs. lokal
 
 - In der Cloud gibt es kein Factorio. Der Push erreicht den lokalen Mod-Ordner (Junction) nur nach `git pull`, danach Factorio komplett neu starten (neue Einstellungen!) und `/gamble-recalc`

@@ -9,6 +9,7 @@ Exchange items for coins, bet them on a target item and let the wheel of fortune
 - **Consolation prizes:** some of the losing fields hold a tenth or a hundredth of the stake in coins.
 - **Free spins:** a miss can give a free spin (5 %). Like on a slot machine it replays the bet it was won with, multiplier included, for free. Free spins play automatically one after another.
 - **Statistics:** coins staked, coins returned (prizes at their exchange value) and your best hit, right in the window.
+- **Autospin:** the Auto button keeps spinning with your bet until you stop it or run out of coins.
 - **Multiplier:** the green button next to Spin multiplies stake and prize of a spin (x1 up to x100). The chance stays the same.
 - **Vanilla controls:** the window shows your inventory, items move with the usual clicks (left, right, shift, ctrl). Shift click puts a stack into the exchange slot.
 - **Prize area:** grows with your wins and never keeps empty rows. "Take all" moves everything to your inventory, ctrl click takes one kind.

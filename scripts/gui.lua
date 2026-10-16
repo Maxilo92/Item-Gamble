@@ -30,7 +30,7 @@ local PICKER = "item_gamble_picker"
 local INVENTORY_COLUMNS = 10
 local INVENTORY_ROWS = 10    -- mehr Zeilen scrollen
 local OUTPUT_ROWS = 8        -- Gewinn-Bereich: mehr Zeilen scrollen
-local AUTOSPIN_DELAY = 60    -- Frames Pause vor einem automatischen Freispin, Zeit fürs Ergebnis
+local AUTOSPIN_DELAY = 60    -- Frames Pause vor einem automatischen Dreh, Zeit fürs Ergebnis
 local PICKER_COLUMNS = 11   -- 6 Gruppen-Tabs à 75 px sind so breit wie 11 Slots
 local PICKER_ROWS = 10
 local NAMES = {
@@ -43,6 +43,7 @@ local NAMES = {
   target_slider = "item_gamble_target_slider",
   target_amount = "item_gamble_target_amount",
   multi = "item_gamble_multi",
+  autospin = "item_gamble_autospin",
   take_all = "item_gamble_take_all",
   reset_stats = "item_gamble_reset_stats",
   spin = "item_gamble_spin",
@@ -353,6 +354,9 @@ local function build_window(player, data)
   filler.style.horizontally_stretchable = true
   filler.style.height = 32
   filler.drag_target = window
+  -- Autospin: dreht mit der eingestellten Wette weiter, bis man stoppt. Stil und
+  -- Beschriftung setzt gui.refresh (Auto bzw. rot Stopp).
+  local autospin = buttons.add({ type = "button", name = NAMES.autospin })
   -- Multiplikator: Klick schaltet weiter, Rechtsklick zurück. So hoch und fett wie Drehen.
   local multi = buttons.add({
     type = "button",
@@ -398,6 +402,7 @@ local function build_window(player, data)
     reel_slots = reel_slots,
     result = result,
     multi = multi,
+    autospin = autospin,
     take_all = take_all,
     spin = spin,
     stats = stats,
@@ -735,6 +740,17 @@ function gui.refresh(player, typing)
       format_coins(stats.exchanged or 0), string.format("%.0f", values.exchange_rate() * 100) }
   end
 
+  -- Autospin: läuft er, ist der Knopf rot und stoppt ihn; sonst startet er, sobald
+  -- eine Wette möglich ist
+  local autospin = elems.autospin
+  autospin.style = data.autospin and "red_button" or "button"
+  autospin.style.height = 32
+  autospin.style.minimal_width = 72
+  autospin.style.font = "default-dialog-button"
+  autospin.caption = data.autospin and { "item-gamble.autospin-stop" } or { "item-gamble.autospin" }
+  autospin.tooltip = data.autospin and { "item-gamble.autospin-stop-tooltip" } or { "item-gamble.autospin-tooltip" }
+  autospin.enabled = data.autospin or ((free or state.ok) and true or false)
+
   elems.spin.enabled = (free or state.ok) and not spinning
   if spinning then
     elems.spin.caption = { "item-gamble.spinning" }
@@ -1045,6 +1061,7 @@ local function cleanup(player)
     if storage.autospins then
       storage.autospins[player.index] = nil
     end
+    data.autospin = false
     data.open = false
     data.elems = nil
     data.last = nil
@@ -1069,6 +1086,18 @@ function gui.toggle(player)
 end
 
 -- ── Ereignisse ──────────────────────────────────────────────────────────────
+
+-- Dreh starten. Bei angehaltener Zeit (z.B. im Editor) gibt es keine Ticks für die
+-- Animation, dann wird sofort aufgelöst.
+local function start_spin(player, data)
+  gamble.spin(player, data)
+  if data.spin and game.tick_paused then
+    local result = gamble.finish(player, data)
+    if result.won or (result.freespins or 0) > 0 then
+      player.play_sound({ path = "utility/achievement_unlocked" })
+    end
+  end
+end
 
 local function on_click(event)
   local element = event.element
@@ -1127,12 +1156,19 @@ local function on_click(event)
     if storage.autospins then
       storage.autospins[player.index] = nil
     end
-    gamble.spin(player, data)
-    -- Angehaltene Zeit (z.B. im Editor): ohne Ticks keine Animation, gleich auflösen
-    if data.spin and game.tick_paused then
-      local result = gamble.finish(player, data)
-      if result.won or (result.freespins or 0) > 0 then
-        player.play_sound({ path = "utility/achievement_unlocked" })
+    start_spin(player, data)
+    gui.refresh(player)
+  elseif name == NAMES.autospin then
+    if data.autospin then
+      -- Der laufende Dreh läuft noch zu Ende, danach geht es nicht weiter
+      data.autospin = false
+    else
+      data.autospin = true
+      if not data.spin then
+        if storage.autospins then
+          storage.autospins[player.index] = nil
+        end
+        start_spin(player, data)
       end
     end
     gui.refresh(player)
@@ -1254,9 +1290,11 @@ end
 -- Jeden Tick: laufende Walzen bewegen, fertige auszahlen. Gezählt werden eigene
 -- Frames statt Spielticks, damit ein geladener Spielstand dort weitermacht.
 function gui.tick()
-  -- Anstehende Freispins laufen nach einer kurzen Pause von selbst an, solange das
-  -- Fenster offen ist. Eigene Tabelle: storage.spins darf während der Schleife unten
-  -- keine neuen Einträge bekommen.
+  -- Anstehende Freispins und der Autospin laufen nach einer kurzen Pause von selbst
+  -- an, solange das Fenster offen ist. Freispins zuerst (gamble.spin spielt sie
+  -- immer vor der eigenen Wette). Geht die Wette nicht mehr (Konto leer, Gewinn-
+  -- Bereich voll), stoppt der Autospin. Eigene Tabelle: storage.spins darf während
+  -- der Schleife unten keine neuen Einträge bekommen.
   local auto = storage.autospins
   if auto and next(auto) then
     for index, frames in pairs(auto) do
@@ -1266,9 +1304,16 @@ function gui.tick()
         auto[index] = nil
         local player = game.get_player(index)
         local data = storage.players[index]
-        if player and data and data.open and data.elems and data.elems.window.valid
-          and not data.spin and gamble.next_freespin(data) then
-          gamble.spin(player, data)
+        if player and data and data.open and data.elems and data.elems.window.valid and not data.spin then
+          if gamble.next_freespin(data) then
+            gamble.spin(player, data)
+          elseif data.autospin then
+            if gamble.evaluate(data).ok then
+              gamble.spin(player, data)
+            else
+              data.autospin = false
+            end
+          end
           gui.refresh(player)
         end
       end
@@ -1296,7 +1341,7 @@ function gui.tick()
         end
         if panel_open then
           gui.refresh(player)
-          if gamble.next_freespin(data) then
+          if gamble.next_freespin(data) or data.autospin then
             storage.autospins = storage.autospins or {}
             storage.autospins[index] = AUTOSPIN_DELAY
           end
